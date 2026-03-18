@@ -395,7 +395,14 @@ def team_approve_join(
             join_req = msg
             break
 
-    proposed_name = join_req.proposed_name if join_req else f"agent-{request_id[:6]}"
+    if join_req is None:
+        _output(
+            {"error": f"No join request found with id '{request_id}'"},
+            lambda d: console.print(f"[red]Error: {d['error']}[/red]"),
+        )
+        raise typer.Exit(1)
+
+    proposed_name = join_req.proposed_name
     final_name = assigned_name or proposed_name
     new_agent_id = uuid.uuid4().hex[:12]
 

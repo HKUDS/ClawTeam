@@ -145,12 +145,22 @@ class MailboxManager:
     def receive(self, agent_name: str, limit: int = 10) -> list[TeamMessage]:
         """Receive and delete messages from an agent's inbox (FIFO)."""
         raw = self._transport.fetch(agent_name, limit=limit, consume=True)
-        return [TeamMessage.model_validate(json.loads(r)) for r in raw]
+        return self._parse_messages(raw)
 
     def peek(self, agent_name: str) -> list[TeamMessage]:
         """Return pending messages without consuming them."""
         raw = self._transport.fetch(agent_name, consume=False)
-        return [TeamMessage.model_validate(json.loads(r)) for r in raw]
+        return self._parse_messages(raw)
+
+    @staticmethod
+    def _parse_messages(raw: list[bytes]) -> list[TeamMessage]:
+        result: list[TeamMessage] = []
+        for r in raw:
+            try:
+                result.append(TeamMessage.model_validate(json.loads(r)))
+            except (json.JSONDecodeError, Exception):
+                pass
+        return result
 
     def peek_count(self, agent_name: str) -> int:
         return self._transport.count(agent_name)
