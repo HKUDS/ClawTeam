@@ -54,6 +54,8 @@ class TmuxBackend(SpawnBackend):
             env_vars["CLAWTEAM_TRANSPORT"] = transport
         if cwd:
             env_vars["CLAWTEAM_WORKSPACE_DIR"] = cwd
+        # Inject context awareness flags
+        env_vars["CLAWTEAM_CONTEXT_ENABLED"] = "1"
         if env:
             env_vars.update(env)
 

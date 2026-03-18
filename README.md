@@ -21,11 +21,9 @@
   <a href="https://github.com/HKUDS/.github/blob/main/profile/README.md"><img src="https://img.shields.io/badge/WeChat-Group-C5EAB4?style=flat&logo=wechat&logoColor=white" alt="WeChat"></a>
 </p>
 
-**One Command Line: Full Automation.** — agents spawn swarms, delegate tasks, and deliver results. 
+**One Command Line: Set Your Goal** — agents spawn swarms, delegate tasks, and deliver results automatically. 
 
-Human provides the goal. The Agent Team orchestrates everything else.
-
-Full compatibility with [Claude Code](https://claude.ai/claude-code), [Codex](https://openai.com/codex), [OpenClaw](https://github.com/nicepkg/OpenClaw), [nanobot](https://github.com/AbanteAI/nanobot), [Cursor](https://cursor.com), and any CLI agent.&nbsp;&nbsp;[**中文文档**](README_CN.md) | [**한국어**](README_KR.md)
+Full compatibility with [Claude Code](https://claude.ai/claude-code), [Codex](https://openai.com/codex), [OpenClaw](https://github.com/nicepkg/OpenClaw), [nanobot](https://github.com/AbanteAI/nanobot), [Cursor](https://cursor.com), and any CLI agent.&nbsp;&nbsp;[**中文文档**](README_CN.md)
 
 <p align="center">
   <img src="assets/teaser.png" alt="ClawTeam - AI agents orchestrating themselves" width="800">
@@ -47,13 +45,13 @@ Full compatibility with [Claude Code](https://claude.ai/claude-code), [Codex](ht
 
 <img src="assets/scene-autoresearch.png" width="180">
 
-<p align="center"><strong>• Large-Scale Automated ML Experimentation</strong></p>
+<p align="center"><strong>Large-Scale Automated ML Experimentation</strong></p>
 
-<p align="center"><strong>• AI Model Training & Optimization</strong></p>
+<p align="center"><strong>AI Model Training & Optimization</strong></p>
 
-<p align="center"><strong>• AI-Driven Hypothesis Generation & Validation</strong></p>
+<p align="center"><strong>AI-Driven Hypothesis Generation & Validation</strong></p>
 
-<p align="center"><strong>• Self-Improving Model Architectures</strong></p>
+<p align="center"><strong>Self-Improving Model Architectures</strong></p>
 
 </td>
 <td width="25%" align="center" style="vertical-align: top; padding: 15px;">
@@ -66,13 +64,9 @@ Full compatibility with [Claude Code](https://claude.ai/claude-code), [Codex](ht
 
 <img src="assets/scene-engineering.png" width="180">
 
-<p align="center"><strong>• Autonomous Full-Stack Development</strong></p>
+<p align="center"><strong>Parallel Software Development</strong></p>
 
-<p align="center"><strong>• Self-Evolving Software<strong></p>
-
-<p align="center"><strong>• Collaborative Open Source Development<strong></p>
-
-<p align="center"><strong>• Real-Time System Integration<strong></p>
+<p align="center">Agents split work into API, backend, frontend, tests — each on its own git branch, auto-merging on completion</p>
 
 </td>
 <td width="25%" align="center" style="vertical-align: top; padding: 15px;">
@@ -85,13 +79,9 @@ Full compatibility with [Claude Code](https://claude.ai/claude-code), [Codex](ht
 
 <img src="assets/scene-hedgefund.png" width="180">
 
-<p align="center"><strong>• Automated Market Research & Data Mining</strong></p>
+<p align="center"><strong>Multi-Analyst Signal Fusion</strong></p>
 
-<p align="center"><strong>• Multi-Strategy Portfolio Optimization</strong></p>
-
-<p align="center"><strong>• Real-Time Risk Assessment</strong></p>
-
-<p align="center"><strong>• Algorithmic Trading Execution & Monitoring</strong></p>
+<p align="center">7 analyst agents (value, growth, technical, fundamentals, sentiment) + risk manager converge on investment decisions</p>
 
 </td>
 <td width="25%" align="center" style="vertical-align: top; padding: 15px;">
@@ -104,13 +94,9 @@ Full compatibility with [Claude Code](https://claude.ai/claude-code), [Codex](ht
 
 <img src="assets/scene-template.png" width="180">
 
-<p align="center"><strong>• Custom Scientific Research Teams</strong></p>
+<p align="center"><strong>One-Command Team Launch</strong></p>
 
-<p align="center"><strong>• Personalized Investment Committees</strong></p>
-
-<p align="center"><strong>• Business Operations Teams</strong></p>
-
-<p align="center"><strong>• Content Production Studios</strong></p>
+<p align="center">Define any team archetype as a TOML template — roles, tasks, prompts — and launch with <code>clawteam launch</code></p>
 
 </td>
 </tr>
@@ -120,32 +106,25 @@ Full compatibility with [Claude Code](https://claude.ai/claude-code), [Codex](ht
 
 https://github.com/user-attachments/assets/f6f0b220-9a5e-4d0a-a25d-f80753d3639b
 
-☝️ Intelligent leader agent orchestrates 8 specialized sub-agents across 8 H100 GPUs, autonomously designing experiments and dynamically reallocating resources based on real-time performance.
-
-🧠 The system synthesizes breakthroughs across teams and evolves strategies independently — achieving full research automation without human intervention.
+*☝️ A leader Claude agent spawns 8 sub-agents across 8 H100 GPUs, assigns experiment directions, monitors progress, cross-pollinates findings, and redirects unproductive agents — fully autonomously.*
 
 ---
 
 ## 🤔 Why ClawTeam?
 
-Current AI agents are powerful — but they work in **isolation**. When facing complex tasks, you're stuck manually coordinating multiple agents, juggling context, and stitching together fragmented results.
+AI coding agents are powerful — but they work **alone**. When a task is too big for one agent, you're stuck manually splitting work, copy-pasting context, and merging results.
 
-**What if agents could think and work as a team?**
+**What if agents could swarm?**
 
-ClawTeam unlocks **Agent Swarm Intelligence** — where AI agents self-organize into collaborative teams, intelligently divide complex work, share insights in real-time, and converge on breakthrough solutions.
+ClawTeam enables **Agent Swarm Intelligence** — agents that self-organize into teams, divide work, share discoveries, and converge on solutions. A leader agent can:
 
-• **🚀 Spawns specialized sub-agents** — each with dedicated environments and focus areas
+- 🚀 **Spawn sub-agents** — each in its own git worktree and tmux session
+- 📋 **Assign tasks** — with dependency chains that auto-unblock
+- 💬 **Send messages** — direct instructions to any sub-agent
+- 📊 **Monitor progress** — check the kanban board, read results
+- 🔄 **Redirect work** — kill unproductive agents, reassign with new directions
 
-• **📋 Designs intelligent task allocation** — with smart dependency management
-
-• **💬 Facilitates real-time coordination** — seamless inter-agent communication
-
-• **📊 Monitors team performance** — tracks progress and identifies bottlenecks
-
-• **🔄 Adapts strategies dynamically** — reallocates resources and redirects efforts
-
-#### ✨ The Result?**
-You set the vision. The swarm executes with collective intelligence.
+The human just provides the initial goal. **The swarm handles the rest.**
 
 <p align="center">
   <img src="assets/comic-how-it-works.png" alt="How ClawTeam works - comic" width="700">
@@ -215,21 +194,7 @@ clawteam board serve --port 8080
 
 ### 🔬 1. Autonomous ML Research — 8 Agents × 8 H100 GPUs
 
-Based on [@karpathy's autoresearch](https://github.com/karpathy/autoresearch).
-
-#### 💫 One Command. Full Automation.
-
-#### Human input: "Optimize this LLM training setup using 8 GPUs"
-
-The Agent Team handles everything else:
-- Spawns 8 specialized research agents across H100s
-- Designs 2000+ autonomous experiments
-- Achieves breakthrough improvements (val_bpb: 1.044→0.977)
-- Zero human intervention required
-
-#### 🎯 Pure Research at Scale
-
-Transform months of manual hyperparameter tuning into hours of intelligent automation.
+Based on [@karpathy's autoresearch](https://github.com/karpathy/autoresearch). The human tells a leader agent: *"Optimize this LLM training setup using 8 GPUs."* **The leader does everything else.**
 
 <p align="center">
   <img src="assets/autoresearch-progress.png" alt="AutoResearch Progress" width="720">
@@ -237,7 +202,7 @@ Transform months of manual hyperparameter tuning into hours of intelligent autom
   <em>🏆 val_bpb: 1.044 → 0.977 (6.4% improvement) | 2430+ experiments | ~30 GPU-hours</em>
 </p>
 
-**What agent team did autonomously:**
+**What the leader agent did autonomously:**
 
 ```
 Human prompt: "Use 8 GPUs to optimize train.py. Read program.md for instructions."
@@ -648,7 +613,19 @@ We welcome contributions! ClawTeam is designed to be extensible:
 
 ## ⭐ Star History
 
-If you find ClawTeam helpful, please consider to give us a star! ⭐
+If ClawTeam helps your AI agents work in teams, give us a star! ⭐
+
+<div align="center">
+  <a href="https://star-history.com/#HKUDS/ClawTeam&Date">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=HKUDS/ClawTeam&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=HKUDS/ClawTeam&type=Date" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=HKUDS/ClawTeam&type=Date" />
+    </picture>
+  </a>
+</div>
+
+---
 
 ## 📄 License
 

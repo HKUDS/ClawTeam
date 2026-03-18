@@ -1,10 +1,27 @@
-"""Agent prompt builder — identity + task only.
+"""Agent prompt builder — identity + task + context awareness.
 
 Coordination knowledge (how to use clawteam CLI) is provided
 by the ClawTeam Skill, not duplicated here.
 """
 
 from __future__ import annotations
+
+
+def _build_context_block(team_name: str, agent_name: str, repo: str | None = None) -> str:
+    """Build a context awareness block from the workspace context layer.
+
+    Includes recent changes from teammates, file overlap warnings,
+    and upstream dependency context. Returns empty string if context
+    layer is unavailable or no relevant context exists.
+    """
+    try:
+        from clawteam.workspace.context import inject_context
+        ctx = inject_context(team_name, agent_name, repo)
+        if ctx and "No cross-agent context" not in ctx:
+            return ctx
+    except Exception:
+        pass
+    return ""
 
 
 def build_agent_prompt(
@@ -17,8 +34,9 @@ def build_agent_prompt(
     user: str = "",
     workspace_dir: str = "",
     workspace_branch: str = "",
+    repo_path: str | None = None,
 ) -> str:
-    """Build agent prompt: identity + task + optional workspace info."""
+    """Build agent prompt: identity + task + context + coordination."""
     lines = [
         "## Identity\n",
         f"- Name: {agent_name}",
@@ -39,10 +57,23 @@ def build_agent_prompt(
             f"- Branch: {workspace_branch}",
             "- This is an isolated git worktree. Your changes do not affect the main branch.",
         ])
+
     lines.extend([
         "",
         "## Task\n",
         task,
+    ])
+
+    # Inject cross-agent context awareness
+    context_block = _build_context_block(team_name, agent_name, repo_path)
+    if context_block:
+        lines.extend([
+            "",
+            "## Context\n",
+            context_block,
+        ])
+
+    lines.extend([
         "",
         "## Coordination Protocol\n",
         f"- Use `clawteam task list {team_name} --owner {agent_name}` to see your tasks.",

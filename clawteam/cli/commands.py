@@ -50,7 +50,7 @@ def main(
         None, "--data-dir", help="Override data directory (default: ~/.clawteam).",
     ),
     transport: Optional[str] = typer.Option(
-        None, "--transport", help="Transport backend: file or p2p.",
+        None, "--transport", help="Transport backend: file, p2p, or acpx.",
     ),
 ):
     """clawteam - Framework-agnostic multi-agent coordination CLI."""
@@ -93,7 +93,9 @@ def config_show():
     """Show all configuration settings and their sources."""
     from clawteam.config import get_effective
 
-    keys = ["data_dir", "user", "default_team"]
+    keys = ["data_dir", "user", "default_team", "transport", "default_backend",
+            "gource_path", "gource_resolution", "gource_seconds_per_day",
+            "acpx_path", "acpx_default_format", "acpx_approve_mode"]
     data = {}
     for k in keys:
         val, source = get_effective(k)
@@ -113,13 +115,15 @@ def config_show():
 
 @config_app.command("set")
 def config_set(
-    key: str = typer.Argument(..., help="Config key: data_dir, user, default_team"),
+    key: str = typer.Argument(..., help="Config key"),
     value: str = typer.Argument(..., help="Config value"),
 ):
     """Persistently set a configuration value."""
     from clawteam.config import load_config, save_config
 
-    valid_keys = {"data_dir", "user", "default_team"}
+    valid_keys = {"data_dir", "user", "default_team", "transport", "default_backend",
+                  "gource_path", "gource_resolution", "gource_seconds_per_day",
+                  "acpx_path", "acpx_default_format", "acpx_approve_mode"}
     if key not in valid_keys:
         console.print(f"[red]Invalid key '{key}'. Valid: {', '.join(sorted(valid_keys))}[/red]")
         raise typer.Exit(1)
@@ -136,12 +140,14 @@ def config_set(
 
 @config_app.command("get")
 def config_get(
-    key: str = typer.Argument(..., help="Config key: data_dir, user, default_team"),
+    key: str = typer.Argument(..., help="Config key"),
 ):
     """Get the effective value of a config key."""
     from clawteam.config import get_effective
 
-    valid_keys = {"data_dir", "user", "default_team"}
+    valid_keys = {"data_dir", "user", "default_team", "transport", "default_backend",
+                  "gource_path", "gource_resolution", "gource_seconds_per_day",
+                  "acpx_path", "acpx_default_format", "acpx_approve_mode"}
     if key not in valid_keys:
         console.print(f"[red]Invalid key '{key}'. Valid: {', '.join(sorted(valid_keys))}[/red]")
         raise typer.Exit(1)
@@ -1527,7 +1533,7 @@ def lifecycle_on_exit(
 
 @app.command("spawn")
 def spawn_agent(
-    backend: Optional[str] = typer.Argument(None, help="Backend: tmux (default) or subprocess"),
+    backend: Optional[str] = typer.Argument(None, help="Backend: tmux (default), subprocess, or acpx"),
     command: list[str] = typer.Argument(None, help="Command and arguments to run (default: claude)"),
     team: Optional[str] = typer.Option(None, "--team", "-t", help="Team name"),
     agent_name: Optional[str] = typer.Option(None, "--agent-name", "-n", help="Agent name"),
@@ -1541,6 +1547,11 @@ def spawn_agent(
     """Spawn a new agent process with identity + task as its initial prompt.
 
     Defaults: tmux backend, claude command, git worktree isolation, skip-permissions on.
+
+    Backends:
+      tmux        - Launch in tmux windows (visual monitoring)
+      subprocess  - Launch as background processes
+      acpx        - Launch via ACPX Agent Client Protocol (multi-provider)
     """
     from clawteam.config import get_effective
     from clawteam.spawn import get_backend
@@ -1610,6 +1621,7 @@ def spawn_agent(
             user=_os.environ.get("CLAWTEAM_USER", ""),
             workspace_dir=cwd or "",
             workspace_branch=ws_branch,
+            repo_path=repo,
         )
 
     # Session resume: inject --resume flag for claude commands
@@ -1821,6 +1833,94 @@ def board_attach(
     console.print(f"[green]OK[/green] {result}")
 
 
+@board_app.command("gource")
+def board_gource(
+    team: str = typer.Argument(..., help="Team name"),
+    export: Optional[str] = typer.Option(None, "--export", help="Export video to file (requires FFmpeg)"),
+    log_only: bool = typer.Option(False, "--log-only", help="Output Gource custom log to stdout without launching"),
+    combine_worktrees: bool = typer.Option(True, "--combine-worktrees/--events-only", help="Combine git worktree logs with event log"),
+    repo: Optional[str] = typer.Option(None, "--repo", help="Git repo path for worktree discovery"),
+    resolution: Optional[str] = typer.Option(None, "--resolution", "-r", help="Viewport resolution (e.g. 1920x1080)"),
+    seconds_per_day: Optional[float] = typer.Option(None, "--speed", "-s", help="Seconds per day (lower = faster)"),
+):
+    """Launch Gource visualization of team activity.
+
+    Visualizes ClawTeam events (task changes, messages, agent joins) and
+    optionally combines git history from all agent worktrees into a unified
+    Gource animation showing parallel collaboration.
+    """
+    from clawteam.board.gource import (
+        generate_combined_log,
+        generate_event_log,
+        generate_git_log,
+        find_gource,
+        launch_gource,
+    )
+    import tempfile
+
+    # Generate log lines
+    if combine_worktrees:
+        lines = generate_combined_log(team, repo)
+    else:
+        lines = generate_event_log(team)
+
+    if not lines:
+        _output(
+            {"error": f"No activity found for team '{team}'"},
+            lambda d: console.print(f"[yellow]{d['error']}[/yellow]"),
+        )
+        raise typer.Exit(1)
+
+    # --log-only: just print the custom log
+    if log_only:
+        for line in lines:
+            print(line)
+        return
+
+    # Check gource is available
+    gource_bin = find_gource()
+    if not gource_bin:
+        _output(
+            {"error": "Gource not found. Install it (https://gource.io/) or set gource_path in config."},
+            lambda d: console.print(f"[red]{d['error']}[/red]"),
+        )
+        raise typer.Exit(1)
+
+    # Write log to temp file
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False, prefix="clawteam-gource-") as f:
+        f.write("\n".join(lines) + "\n")
+        log_path = Path(f.name)
+
+    try:
+        title = f"ClawTeam: {team}"
+        proc = launch_gource(
+            log_file=log_path,
+            title=title,
+            resolution=resolution or "",
+            seconds_per_day=seconds_per_day or 0,
+            export_path=export,
+        )
+        if proc is None:
+            _output(
+                {"error": "Failed to launch Gource" + (" (FFmpeg required for export)" if export else "")},
+                lambda d: console.print(f"[red]{d['error']}[/red]"),
+            )
+            raise typer.Exit(1)
+
+        if export:
+            console.print(f"Exporting Gource visualization to [cyan]{export}[/cyan]...")
+            proc.wait()
+            console.print(f"[green]OK[/green] Video saved to {export}")
+        else:
+            console.print(f"Gource launched for team [cyan]{team}[/cyan]. Close the window to exit.")
+            proc.wait()
+    finally:
+        try:
+            log_path.unlink()
+        except OSError:
+            pass
+
+
 # ============================================================================
 # Workspace Commands
 # ============================================================================
@@ -1970,6 +2070,154 @@ def workspace_status(
     stat = git.diff_stat(Path(ws.worktree_path))
     console.print(f"[bold]Workspace status — {agent}[/bold] (branch: {ws.branch_name})")
     console.print(stat)
+
+
+# ============================================================================
+# Context Commands (git context layer)
+# ============================================================================
+
+context_app = typer.Typer(help="Git context: diffs, file ownership, conflicts, cross-branch log")
+app.add_typer(context_app, name="context")
+
+
+@context_app.command("diff")
+def context_diff(
+    team: str = typer.Argument(..., help="Team name"),
+    agent: str = typer.Argument(..., help="Agent name"),
+    repo: Optional[str] = typer.Option(None, "--repo", help="Git repo path"),
+):
+    """Show diff statistics for an agent's branch vs. base."""
+    from clawteam.workspace.context import agent_diff
+
+    try:
+        data = agent_diff(team, agent, repo)
+    except Exception as e:
+        _output({"error": str(e)}, lambda d: console.print(f"[red]{d['error']}[/red]"))
+        raise typer.Exit(1)
+
+    def _human(d):
+        console.print(f"[bold]{d['summary']}[/bold]")
+        if d["diff_stat"]:
+            console.print(d["diff_stat"])
+
+    _output(data, _human)
+
+
+@context_app.command("files")
+def context_files(
+    team: str = typer.Argument(..., help="Team name"),
+    repo: Optional[str] = typer.Option(None, "--repo", help="Git repo path"),
+):
+    """Show file ownership map — which agents modify which files."""
+    from clawteam.workspace.context import file_owners
+
+    try:
+        data = file_owners(team, repo)
+    except Exception as e:
+        _output({"error": str(e)}, lambda d: console.print(f"[red]{d['error']}[/red]"))
+        raise typer.Exit(1)
+
+    def _human(d):
+        if not d:
+            console.print("[dim]No modified files found.[/dim]")
+            return
+        table = Table(title=f"File Ownership — {team}")
+        table.add_column("File", style="cyan")
+        table.add_column("Agents")
+        for fname, agents in sorted(d.items()):
+            style = "bold red" if len(agents) > 1 else ""
+            table.add_row(fname, ", ".join(agents), style=style)
+        console.print(table)
+
+    _output(data, _human)
+
+
+@context_app.command("conflicts")
+def context_conflicts(
+    team: str = typer.Argument(..., help="Team name"),
+    repo: Optional[str] = typer.Option(None, "--repo", help="Git repo path"),
+):
+    """Detect file overlaps across agent branches."""
+    from clawteam.workspace.conflicts import detect_overlaps
+
+    try:
+        data = detect_overlaps(team, repo)
+    except Exception as e:
+        _output({"error": str(e)}, lambda d: console.print(f"[red]{d['error']}[/red]"))
+        raise typer.Exit(1)
+
+    def _human(d):
+        if not d:
+            console.print("[green]No overlaps detected.[/green]")
+            return
+        table = Table(title=f"File Overlaps — {team}")
+        table.add_column("File", style="cyan")
+        table.add_column("Agents")
+        table.add_column("Severity")
+        severity_styles = {"high": "bold red", "medium": "yellow", "low": "dim"}
+        for item in d:
+            sev = item["severity"]
+            table.add_row(
+                item["file"],
+                ", ".join(item["agents"]),
+                f"[{severity_styles.get(sev, '')}]{sev}[/{severity_styles.get(sev, '')}]",
+            )
+        console.print(table)
+
+    _output(data, _human)
+
+
+@context_app.command("log")
+def context_log(
+    team: str = typer.Argument(..., help="Team name"),
+    limit: int = typer.Option(50, "--limit", "-n", help="Max entries"),
+    repo: Optional[str] = typer.Option(None, "--repo", help="Git repo path"),
+):
+    """Unified cross-branch commit log for all agents."""
+    from clawteam.workspace.context import cross_branch_log
+
+    try:
+        data = cross_branch_log(team, limit=limit, repo=repo)
+    except Exception as e:
+        _output({"error": str(e)}, lambda d: console.print(f"[red]{d['error']}[/red]"))
+        raise typer.Exit(1)
+
+    def _human(d):
+        if not d:
+            console.print("[dim]No commits found.[/dim]")
+            return
+        for entry in d:
+            ts = entry["timestamp"][:19]
+            console.print(
+                f"[dim]{ts}[/dim] [cyan]{entry['agent']}[/cyan] "
+                f"[yellow]{entry['hash'][:8]}[/yellow] {entry['message']}"
+            )
+            if entry["files"]:
+                for f in entry["files"]:
+                    console.print(f"    {f}")
+
+    _output(data, _human)
+
+
+@context_app.command("inject")
+def context_inject(
+    team: str = typer.Argument(..., help="Team name"),
+    agent: str = typer.Argument(..., help="Target agent name"),
+    repo: Optional[str] = typer.Option(None, "--repo", help="Git repo path"),
+):
+    """Generate context block for injection into an agent's prompt."""
+    from clawteam.workspace.context import inject_context
+
+    try:
+        text = inject_context(team, agent, repo)
+    except Exception as e:
+        _output({"error": str(e)}, lambda d: console.print(f"[red]{d['error']}[/red]"))
+        raise typer.Exit(1)
+
+    if _json_output:
+        _output({"context": text}, None)
+    else:
+        console.print(text)
 
 
 # ============================================================================

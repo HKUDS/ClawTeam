@@ -49,6 +49,8 @@ class BoardRenderer:
     def render_team_board_live(self, collector, team_name: str, interval: float = 2.0) -> None:
         """Render a live-refreshing team board. Ctrl+C to stop."""
         running = True
+        notify_counter = 0
+        NOTIFY_INTERVAL = 5  # auto_notify every N refresh cycles
 
         def _handle_signal(signum, frame):
             nonlocal running
@@ -70,6 +72,19 @@ class BoardRenderer:
                         live.update(renderable)
                         break
                     live.update(renderable)
+
+                    # Periodically run conflict auto-notification
+                    notify_counter += 1
+                    if notify_counter >= NOTIFY_INTERVAL:
+                        notify_counter = 0
+                        try:
+                            from clawteam.team.mailbox import MailboxManager
+                            from clawteam.workspace.conflicts import auto_notify
+                            mailbox = MailboxManager(team_name)
+                            auto_notify(team_name, mailbox)
+                        except Exception:
+                            pass
+
                     time.sleep(interval)
         finally:
             signal.signal(signal.SIGINT, old_sigint)
@@ -132,7 +147,29 @@ class BoardRenderer:
         # 3. Task board (4-column kanban)
         parts.append(self._build_task_kanban(tasks, summary))
 
+        # 4. Conflict warnings (if any)
+        conflicts = data.get("conflicts", {})
+        if conflicts.get("totalOverlaps", 0) > 0:
+            parts.append(self._build_conflict_panel(conflicts))
+
         return Group(*parts)
+
+    def _build_conflict_panel(self, conflicts: dict) -> Panel:
+        """Build a panel showing file overlap / conflict warnings."""
+        overlaps = conflicts.get("overlaps", [])
+        high = conflicts.get("highSeverity", 0)
+        medium = conflicts.get("mediumSeverity", 0)
+
+        lines: list[str] = []
+        for o in overlaps:
+            severity = o["severity"]
+            style = "red bold" if severity == "high" else "yellow"
+            agents = ", ".join(o["agents"])
+            lines.append(f"[{style}]{severity.upper()}[/{style}] `{o['file']}` — {agents}")
+
+        body = "\n".join(lines) if lines else "[dim](none)[/dim]"
+        title = f"Conflict Warnings ({high} high, {medium} medium)"
+        return Panel(body, title=title, border_style="red" if high > 0 else "yellow")
 
     def _build_task_kanban(self, tasks: dict, summary: dict) -> Panel:
         """Build the 4-column kanban task board."""

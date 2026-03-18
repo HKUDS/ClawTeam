@@ -24,6 +24,9 @@ def _default_transport(team_name: str) -> Transport:
         agent = AgentIdentity.from_env().agent_name
         from clawteam.transport import get_transport
         return get_transport("p2p", team_name=team_name, bind_agent=agent)
+    if name == "acpx":
+        from clawteam.transport import get_transport
+        return get_transport("acpx", team_name=team_name)
     from clawteam.transport import get_transport
     return get_transport("file", team_name=team_name)
 

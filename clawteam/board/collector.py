@@ -92,6 +92,23 @@ class BoardCollector:
         except Exception:
             pass
 
+        # Conflict/overlap data
+        conflict_data = {}
+        try:
+            from clawteam.workspace.conflicts import detect_overlaps
+            overlaps = detect_overlaps(team_name)
+            conflict_data = {
+                "overlaps": [
+                    {"file": o["file"], "agents": o["agents"], "severity": o["severity"]}
+                    for o in overlaps
+                ],
+                "totalOverlaps": len(overlaps),
+                "highSeverity": sum(1 for o in overlaps if o["severity"] == "high"),
+                "mediumSeverity": sum(1 for o in overlaps if o["severity"] == "medium"),
+            }
+        except Exception:
+            pass
+
         return {
             "team": {
                 "name": config.name,
@@ -106,6 +123,7 @@ class BoardCollector:
             "taskSummary": summary,
             "messages": all_messages,
             "cost": cost_data,
+            "conflicts": conflict_data,
         }
 
     def collect_overview(self) -> list[dict]:

@@ -58,7 +58,7 @@ def is_agent_alive(team_name: str, agent_name: str) -> bool | None:
             if pid:
                 return _pid_alive(pid)
         return alive
-    elif backend == "subprocess":
+    elif backend in ("subprocess", "acpx"):
         return _pid_alive(info.get("pid", 0))
     return None
 
