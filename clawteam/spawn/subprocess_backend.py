@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import os
-import shlex
 import subprocess
 
 from clawteam.spawn.base import SpawnBackend
 from clawteam.spawn.cli_env import build_spawn_path, resolve_clawteam_executable
 from clawteam.spawn.command_validation import normalize_spawn_command, validate_spawn_command
+from clawteam.spawn.utils import is_claude_command, is_codex_command
 
 
 class SubprocessBackend(SpawnBackend):
@@ -30,7 +30,6 @@ class SubprocessBackend(SpawnBackend):
         skip_permissions: bool = False,
     ) -> str:
         spawn_env = os.environ.copy()
-        clawteam_bin = resolve_clawteam_executable()
         spawn_env.update({
             "CLAWTEAM_AGENT_ID": agent_id,
             "CLAWTEAM_AGENT_NAME": agent_name,
@@ -50,9 +49,6 @@ class SubprocessBackend(SpawnBackend):
             spawn_env["CLAWTEAM_WORKSPACE_DIR"] = cwd
         if env:
             spawn_env.update(env)
-        spawn_env["PATH"] = build_spawn_path(spawn_env.get("PATH"))
-        if os.path.isabs(clawteam_bin):
-            spawn_env.setdefault("CLAWTEAM_BIN", clawteam_bin)
 
         normalized_command = normalize_spawn_command(command)
 
@@ -62,9 +58,9 @@ class SubprocessBackend(SpawnBackend):
 
         final_command = list(normalized_command)
         if skip_permissions:
-            if _is_claude_command(normalized_command):
+            if is_claude_command(normalized_command):
                 final_command.append("--dangerously-skip-permissions")
-            elif _is_codex_command(normalized_command):
+            elif is_codex_command(normalized_command):
                 final_command.append("--dangerously-bypass-approvals-and-sandbox")
         if _is_nanobot_command(normalized_command):
             if cwd and not _command_has_workspace_arg(normalized_command):
@@ -72,17 +68,17 @@ class SubprocessBackend(SpawnBackend):
             if prompt:
                 final_command.extend(["-m", prompt])
         elif prompt:
-            if _is_codex_command(normalized_command):
+            if is_codex_command(normalized_command):
                 # Codex accepts prompt as positional argument
                 final_command.append(prompt)
             else:
                 final_command.extend(["-p", prompt])
 
         # Wrap with on-exit hook so task status updates immediately on exit
+        import shlex
         cmd_str = " ".join(shlex.quote(c) for c in final_command)
-        exit_cmd = shlex.quote(clawteam_bin) if os.path.isabs(clawteam_bin) else "clawteam"
         exit_hook = (
-            f"{exit_cmd} lifecycle on-exit --team {shlex.quote(team_name)} "
+            f"clawteam lifecycle on-exit --team {shlex.quote(team_name)} "
             f"--agent {shlex.quote(agent_name)}"
         )
         shell_cmd = f"{cmd_str}; {exit_hook}"
@@ -117,22 +113,6 @@ class SubprocessBackend(SpawnBackend):
             else:
                 self._processes.pop(name, None)
         return result
-
-
-def _is_claude_command(command: list[str]) -> bool:
-    """Check if the command is a claude CLI invocation."""
-    if not command:
-        return False
-    cmd = command[0].rsplit("/", 1)[-1]
-    return cmd in ("claude", "claude-code")
-
-
-def _is_codex_command(command: list[str]) -> bool:
-    """Check if the command is a codex CLI invocation."""
-    if not command:
-        return False
-    cmd = command[0].rsplit("/", 1)[-1]
-    return cmd in ("codex", "codex-cli")
 
 
 def _is_nanobot_command(command: list[str]) -> bool:

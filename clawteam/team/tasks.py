@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-import fcntl
 import json
-import os
-import tempfile
-from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from clawteam.team.models import TaskItem, TaskStatus, get_data_dir
+from clawteam.team.models import TaskItem, TaskPriority, TaskStatus, get_data_dir
 
 
 class TaskLockError(Exception):
@@ -28,10 +24,6 @@ def _task_path(team_name: str, task_id: str) -> Path:
     return _tasks_root(team_name) / f"task-{task_id}.json"
 
 
-def _tasks_lock_path(team_name: str) -> Path:
-    return _tasks_root(team_name) / ".tasks.lock"
-
-
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -46,22 +38,12 @@ class TaskStore:
     def __init__(self, team_name: str):
         self.team_name = team_name
 
-    @contextmanager
-    def _write_lock(self):
-        lock_path = _tasks_lock_path(self.team_name)
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
-        with lock_path.open("a+", encoding="utf-8") as lock_file:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-            try:
-                yield
-            finally:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-
     def create(
         self,
         subject: str,
         description: str = "",
         owner: str = "",
+        priority: TaskPriority | None = None,
         blocks: list[str] | None = None,
         blocked_by: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
@@ -70,20 +52,17 @@ class TaskStore:
             subject=subject,
             description=description,
             owner=owner,
+            priority=priority or TaskPriority.medium,
             blocks=blocks or [],
             blocked_by=blocked_by or [],
             metadata=metadata or {},
         )
         if task.blocked_by:
             task.status = TaskStatus.blocked
-        with self._write_lock():
-            self._save_unlocked(task)
+        self._save(task)
         return task
 
     def get(self, task_id: str) -> TaskItem | None:
-        return self._get_unlocked(task_id)
-
-    def _get_unlocked(self, task_id: str) -> TaskItem | None:
         path = _task_path(self.team_name, task_id)
         if not path.exists():
             return None
@@ -100,63 +79,65 @@ class TaskStore:
         owner: str | None = None,
         subject: str | None = None,
         description: str | None = None,
+        priority: TaskPriority | None = None,
         add_blocks: list[str] | None = None,
         add_blocked_by: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
         caller: str = "",
         force: bool = False,
     ) -> TaskItem | None:
-        with self._write_lock():
-            task = self._get_unlocked(task_id)
-            if not task:
-                return None
+        task = self.get(task_id)
+        if not task:
+            return None
 
-            # Lock logic when transitioning to in_progress
-            if status == TaskStatus.in_progress:
-                self._acquire_lock(task, caller, force)
-                # Record when work actually started
-                if not task.started_at:
-                    task.started_at = _now_iso()
+        # Lock logic when transitioning to in_progress
+        if status == TaskStatus.in_progress:
+            self._acquire_lock(task, caller, force)
+            # Record when work actually started
+            if not task.started_at:
+                task.started_at = _now_iso()
 
-            # Clear lock when transitioning to completed or pending
-            if status in (TaskStatus.completed, TaskStatus.pending):
-                task.locked_by = ""
-                task.locked_at = ""
+        # Clear lock when transitioning to completed or pending
+        if status in (TaskStatus.completed, TaskStatus.pending):
+            task.locked_by = ""
+            task.locked_at = ""
 
-            # Compute duration when completing a task that has a start time
-            if status == TaskStatus.completed and task.started_at:
-                try:
-                    start = datetime.fromisoformat(task.started_at)
-                    duration_secs = (datetime.now(timezone.utc) - start).total_seconds()
-                    task.metadata["duration_seconds"] = round(duration_secs, 2)
-                except (ValueError, TypeError):
-                    pass  # malformed timestamp, skip
+        # Compute duration when completing a task that has a start time
+        if status == TaskStatus.completed and task.started_at:
+            try:
+                start = datetime.fromisoformat(task.started_at)
+                duration_secs = (datetime.now(timezone.utc) - start).total_seconds()
+                task.metadata["duration_seconds"] = round(duration_secs, 2)
+            except (ValueError, TypeError):
+                pass  # malformed timestamp, skip
 
-            if status is not None:
-                task.status = status
-            if owner is not None:
-                task.owner = owner
-            if subject is not None:
-                task.subject = subject
-            if description is not None:
-                task.description = description
-            if add_blocks:
-                for b in add_blocks:
-                    if b not in task.blocks:
-                        task.blocks.append(b)
-            if add_blocked_by:
-                for b in add_blocked_by:
-                    if b not in task.blocked_by:
-                        task.blocked_by.append(b)
-            if metadata:
-                task.metadata.update(metadata)
-            task.updated_at = _now_iso()
+        if status is not None:
+            task.status = status
+        if owner is not None:
+            task.owner = owner
+        if subject is not None:
+            task.subject = subject
+        if description is not None:
+            task.description = description
+        if priority is not None:
+            task.priority = priority
+        if add_blocks:
+            for b in add_blocks:
+                if b not in task.blocks:
+                    task.blocks.append(b)
+        if add_blocked_by:
+            for b in add_blocked_by:
+                if b not in task.blocked_by:
+                    task.blocked_by.append(b)
+        if metadata:
+            task.metadata.update(metadata)
+        task.updated_at = _now_iso()
 
-            if task.status == TaskStatus.completed:
-                self._resolve_dependents_unlocked(task_id)
+        if task.status == TaskStatus.completed:
+            self._resolve_dependents(task_id)
 
-            self._save_unlocked(task)
-            return task
+        self._save(task)
+        return task
 
     def _acquire_lock(self, task: TaskItem, caller: str, force: bool) -> None:
         """Acquire lock on a task for the caller agent."""
@@ -183,27 +164,36 @@ class TaskStore:
         from clawteam.spawn.registry import is_agent_alive
 
         released = []
-        with self._write_lock():
-            for task in self._list_tasks_unlocked():
-                if not task.locked_by:
-                    continue
-                alive = is_agent_alive(self.team_name, task.locked_by)
-                if alive is False:
-                    task.locked_by = ""
-                    task.locked_at = ""
-                    task.updated_at = _now_iso()
-                    self._save_unlocked(task)
-                    released.append(task.id)
+        for task in self.list_tasks():
+            if not task.locked_by:
+                continue
+            alive = is_agent_alive(self.team_name, task.locked_by)
+            if alive is False:
+                task.locked_by = ""
+                task.locked_at = ""
+                task.updated_at = _now_iso()
+                self._save(task)
+                released.append(task.id)
         return released
 
     def list_tasks(
-        self, status: TaskStatus | None = None, owner: str | None = None
+        self,
+        status: TaskStatus | None = None,
+        owner: str | None = None,
+        priority: TaskPriority | None = None,
+        sort_by_priority: bool = False,
     ) -> list[TaskItem]:
-        return self._list_tasks_unlocked(status=status, owner=owner)
+        """List tasks with optional filtering and priority sorting.
 
-    def _list_tasks_unlocked(
-        self, status: TaskStatus | None = None, owner: str | None = None
-    ) -> list[TaskItem]:
+        Args:
+            status: Filter by task status
+            owner: Filter by owner
+            priority: Filter by priority level
+            sort_by_priority: If True, sort by priority (urgent > high > medium > low)
+
+        Returns:
+            List of matching tasks
+        """
         root = _tasks_root(self.team_name)
         tasks = []
         for f in sorted(root.glob("task-*.json")):
@@ -214,9 +204,21 @@ class TaskStore:
                     continue
                 if owner and task.owner != owner:
                     continue
+                if priority and task.priority != priority:
+                    continue
                 tasks.append(task)
             except Exception:
                 continue
+
+        if sort_by_priority:
+            priority_order = {
+                TaskPriority.urgent: 0,
+                TaskPriority.high: 1,
+                TaskPriority.medium: 2,
+                TaskPriority.low: 3,
+            }
+            tasks.sort(key=lambda t: priority_order.get(t.priority, 2))
+
         return tasks
 
     def get_stats(self) -> dict[str, Any]:
@@ -243,23 +245,16 @@ class TaskStore:
             "avg_duration_seconds": round(avg_duration, 2),
         }
 
-    def _save_unlocked(self, task: TaskItem) -> None:
+    def _save(self, task: TaskItem) -> None:
         path = _task_path(self.team_name, task.id)
         path.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp_name = tempfile.mkstemp(
-            dir=path.parent,
-            prefix=f"{path.stem}-",
-            suffix=".tmp",
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(
+            task.model_dump_json(indent=2, by_alias=True), encoding="utf-8"
         )
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as tmp_file:
-                tmp_file.write(task.model_dump_json(indent=2, by_alias=True))
-            Path(tmp_name).replace(path)
-        except BaseException:
-            Path(tmp_name).unlink(missing_ok=True)
-            raise
+        tmp.rename(path)
 
-    def _resolve_dependents_unlocked(self, completed_task_id: str) -> None:
+    def _resolve_dependents(self, completed_task_id: str) -> None:
         root = _tasks_root(self.team_name)
         for f in root.glob("task-*.json"):
             try:
@@ -270,6 +265,6 @@ class TaskStore:
                     if not task.blocked_by and task.status == TaskStatus.blocked:
                         task.status = TaskStatus.pending
                     task.updated_at = _now_iso()
-                    self._save_unlocked(task)
+                    self._save(task)
             except Exception:
                 continue

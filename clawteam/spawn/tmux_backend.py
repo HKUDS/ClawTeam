@@ -12,6 +12,7 @@ import time
 from clawteam.spawn.base import SpawnBackend
 from clawteam.spawn.cli_env import build_spawn_path, resolve_clawteam_executable
 from clawteam.spawn.command_validation import normalize_spawn_command, validate_spawn_command
+from clawteam.spawn.utils import is_claude_command, is_codex_command
 
 
 class TmuxBackend(SpawnBackend):
@@ -40,7 +41,6 @@ class TmuxBackend(SpawnBackend):
             return "Error: tmux not installed"
 
         session_name = f"clawteam-{team_name}"
-        clawteam_bin = resolve_clawteam_executable()
         env_vars = {
             "CLAWTEAM_AGENT_ID": agent_id,
             "CLAWTEAM_AGENT_NAME": agent_name,
@@ -60,9 +60,6 @@ class TmuxBackend(SpawnBackend):
             env_vars["CLAWTEAM_WORKSPACE_DIR"] = cwd
         if env:
             env_vars.update(env)
-        env_vars["PATH"] = build_spawn_path(env_vars.get("PATH", os.environ.get("PATH")))
-        if os.path.isabs(clawteam_bin):
-            env_vars.setdefault("CLAWTEAM_BIN", clawteam_bin)
 
         normalized_command = normalize_spawn_command(command)
 
@@ -75,9 +72,9 @@ class TmuxBackend(SpawnBackend):
         # Build the command (without prompt — we'll send it via send-keys)
         final_command = list(normalized_command)
         if skip_permissions:
-            if _is_claude_command(normalized_command):
+            if is_claude_command(normalized_command):
                 final_command.append("--dangerously-skip-permissions")
-            elif _is_codex_command(normalized_command):
+            elif is_codex_command(normalized_command):
                 final_command.append("--dangerously-bypass-approvals-and-sandbox")
 
         if _is_nanobot_command(normalized_command):
@@ -85,21 +82,20 @@ class TmuxBackend(SpawnBackend):
                 final_command.extend(["-w", cwd])
             if prompt:
                 final_command.extend(["-m", prompt])
-        elif prompt and _is_codex_command(normalized_command):
+        elif prompt and is_codex_command(normalized_command):
             final_command.append(prompt)
 
         cmd_str = " ".join(shlex.quote(c) for c in final_command)
         # Append on-exit hook: runs immediately when agent process exits
-        exit_cmd = shlex.quote(clawteam_bin) if os.path.isabs(clawteam_bin) else "clawteam"
         exit_hook = (
-            f"{exit_cmd} lifecycle on-exit --team {shlex.quote(team_name)} "
+            f"clawteam lifecycle on-exit --team {shlex.quote(team_name)} "
             f"--agent {shlex.quote(agent_name)}"
         )
         # Unset Claude nesting-detection env vars so spawned claude agents
         # don't refuse to start when the leader is itself a claude session.
         unset_clause = "unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_SESSION 2>/dev/null; "
         if cwd:
-            full_cmd = f"{unset_clause}{export_str}; cd {shlex.quote(cwd)} && {cmd_str}; {exit_hook}"
+            full_cmd = f"{unset_clause}cd {shlex.quote(cwd)} && {export_str}; {cmd_str}; {exit_hook}"
         else:
             full_cmd = f"{unset_clause}{export_str}; {cmd_str}; {exit_hook}"
 
@@ -146,7 +142,7 @@ class TmuxBackend(SpawnBackend):
 
         # Send the prompt as input to the interactive claude session
         # (codex prompt is passed as positional arg above, so skip here)
-        if prompt and _is_claude_command(normalized_command):
+        if prompt and is_claude_command(normalized_command):
             # Wait briefly for claude to start up
             time.sleep(2)
             # Write prompt to a temp file and use load-buffer + paste-buffer
@@ -186,7 +182,7 @@ class TmuxBackend(SpawnBackend):
                 stderr=subprocess.PIPE,
             )
             os.unlink(tmp_path)
-        elif prompt and not _is_codex_command(normalized_command) and not _is_nanobot_command(normalized_command):
+        elif prompt and not is_codex_command(normalized_command) and not _is_nanobot_command(normalized_command):
             time.sleep(1)
             subprocess.run(
                 ["tmux", "send-keys", "-t", target, prompt, "Enter"],
@@ -300,22 +296,6 @@ class TmuxBackend(SpawnBackend):
         return result
 
 
-def _is_claude_command(command: list[str]) -> bool:
-    """Check if the command is a claude CLI invocation."""
-    if not command:
-        return False
-    cmd = command[0].rsplit("/", 1)[-1]  # basename
-    return cmd in ("claude", "claude-code")
-
-
-def _is_codex_command(command: list[str]) -> bool:
-    """Check if the command is a codex CLI invocation."""
-    if not command:
-        return False
-    cmd = command[0].rsplit("/", 1)[-1]  # basename
-    return cmd in ("codex", "codex-cli")
-
-
 def _is_nanobot_command(command: list[str]) -> bool:
     """Check if the command is a nanobot CLI invocation."""
     if not command:
@@ -342,7 +322,7 @@ def _confirm_workspace_trust_if_prompted(
     injection and accept it with a single Enter so the interactive TUI remains
     intact.
     """
-    if not (_is_claude_command(command) or _is_codex_command(command)):
+    if not (is_claude_command(command) or is_codex_command(command)):
         return False
 
     deadline = time.monotonic() + timeout_seconds
@@ -372,10 +352,10 @@ def _looks_like_workspace_trust_prompt(command: list[str], pane_text: str) -> bo
     if not pane_text:
         return False
 
-    if _is_claude_command(command):
+    if is_claude_command(command):
         return "trust this folder" in pane_text and "enter to confirm" in pane_text
 
-    if _is_codex_command(command):
+    if is_codex_command(command):
         return (
             "trust the contents of this directory" in pane_text
             and "press enter to continue" in pane_text
@@ -386,4 +366,4 @@ def _looks_like_workspace_trust_prompt(command: list[str], pane_text: str) -> bo
 
 def _is_interactive_cli(command: list[str]) -> bool:
     """Check if the command is an interactive AI CLI."""
-    return _is_claude_command(command) or _is_codex_command(command) or _is_nanobot_command(command)
+    return is_claude_command(command) or is_codex_command(command) or _is_nanobot_command(command)
