@@ -50,16 +50,25 @@ class FileTransport(Transport):
         messages: list[bytes] = []
         for f in files[:limit]:
             try:
-                raw = f.read_bytes()
-                messages.append(raw)
                 if consume:
-                    f.unlink()
-            except Exception:
-                if consume:
+                    # Atomically rename to a `.consumed` marker before reading so
+                    # that concurrent fetchers cannot both process the same message.
+                    consumed = f.with_suffix(".consumed")
                     try:
-                        f.unlink()
+                        f.rename(consumed)
                     except OSError:
-                        pass
+                        # Another process already claimed this message; skip it.
+                        continue
+                    try:
+                        raw = consumed.read_bytes()
+                        messages.append(raw)
+                    finally:
+                        consumed.unlink(missing_ok=True)
+                else:
+                    raw = f.read_bytes()
+                    messages.append(raw)
+            except Exception:
+                continue
         return messages
 
     def count(self, agent_name: str) -> int:

@@ -117,19 +117,23 @@ def config_show():
 
 @config_app.command("set")
 def config_set(
-    key: str = typer.Argument(..., help="Config key: data_dir, user, default_team"),
+    key: str = typer.Argument(..., help="Config key (e.g. data_dir, user, transport, workspace, default_backend, skip_permissions)"),
     value: str = typer.Argument(..., help="Config value"),
 ):
     """Persistently set a configuration value."""
-    from clawteam.config import load_config, save_config
+    from clawteam.config import ClawTeamConfig, load_config, save_config
 
-    valid_keys = {"data_dir", "user", "default_team"}
+    valid_keys = set(ClawTeamConfig.model_fields.keys())
     if key not in valid_keys:
         console.print(f"[red]Invalid key '{key}'. Valid: {', '.join(sorted(valid_keys))}[/red]")
         raise typer.Exit(1)
 
     cfg = load_config()
-    setattr(cfg, key, value)
+    field_info = ClawTeamConfig.model_fields[key]
+    if field_info.annotation is bool:
+        setattr(cfg, key, value.lower() in ("true", "1", "yes"))
+    else:
+        setattr(cfg, key, value)
     save_config(cfg)
 
     _output(
@@ -140,12 +144,12 @@ def config_set(
 
 @config_app.command("get")
 def config_get(
-    key: str = typer.Argument(..., help="Config key: data_dir, user, default_team"),
+    key: str = typer.Argument(..., help="Config key (e.g. data_dir, user, transport, workspace, default_backend, skip_permissions)"),
 ):
     """Get the effective value of a config key."""
-    from clawteam.config import get_effective
+    from clawteam.config import ClawTeamConfig, get_effective
 
-    valid_keys = {"data_dir", "user", "default_team"}
+    valid_keys = set(ClawTeamConfig.model_fields.keys())
     if key not in valid_keys:
         console.print(f"[red]Invalid key '{key}'. Valid: {', '.join(sorted(valid_keys))}[/red]")
         raise typer.Exit(1)
@@ -395,7 +399,14 @@ def team_approve_join(
             join_req = msg
             break
 
-    proposed_name = join_req.proposed_name if join_req else f"agent-{request_id[:6]}"
+    if join_req is None:
+        _output(
+            {"error": f"No join request found with id '{request_id}'"},
+            lambda d: console.print(f"[red]Error: {d['error']}[/red]"),
+        )
+        raise typer.Exit(1)
+
+    proposed_name = join_req.proposed_name
     final_name = assigned_name or proposed_name
     new_agent_id = uuid.uuid4().hex[:12]
 
@@ -2221,6 +2232,10 @@ def launch_team(
             workspace_branch=ws_branch,
         )
 
+        from clawteam.config import get_effective
+        sp_val, _ = get_effective("skip_permissions")
+        _skip = str(sp_val).lower() not in ("false", "0", "no", "")
+
         result = be.spawn(
             command=a_cmd,
             agent_name=agent.name,
@@ -2229,6 +2244,7 @@ def launch_team(
             team_name=t_name,
             prompt=prompt,
             cwd=cwd,
+            skip_permissions=_skip,
         )
         spawned.append({"name": agent.name, "id": a_id, "type": agent.type, "result": result})
 
