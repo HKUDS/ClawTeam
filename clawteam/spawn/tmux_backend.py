@@ -301,11 +301,11 @@ class TmuxBackend(SpawnBackend):
 
 
 def _is_claude_command(command: list[str]) -> bool:
-    """Check if the command is a claude CLI invocation."""
+    """Check if the command is a claude CLI invocation (or nanobot which uses similar behavior)."""
     if not command:
         return False
     cmd = command[0].rsplit("/", 1)[-1]  # basename
-    return cmd in ("claude", "claude-code")
+    return cmd in ("claude", "claude-code", "nanobot")
 
 
 def _is_codex_command(command: list[str]) -> bool:
