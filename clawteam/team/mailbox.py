@@ -122,11 +122,21 @@ class MailboxManager:
         key: str | None = None,
         exclude: list[str] | None = None,
     ) -> list[TeamMessage]:
+        from clawteam.team.manager import TeamManager
+
         exclude_set = set(exclude or [])
         exclude_set.add(from_agent)
+        # Build a mapping from inbox directory name to logical agent name
+        # so we can correctly exclude the sender even when inbox names
+        # use user-prefixed format (e.g. "alice_worker").
+        exclude_inboxes = set()
+        for name in exclude_set:
+            inbox = TeamManager.resolve_inbox(self.team_name, name)
+            exclude_inboxes.add(inbox)
+            exclude_inboxes.add(name)  # also exclude by raw name
         messages = []
         for recipient in self._transport.list_recipients():
-            if recipient not in exclude_set:
+            if recipient not in exclude_inboxes:
                 msg = TeamMessage(
                     type=msg_type,
                     from_agent=from_agent,
