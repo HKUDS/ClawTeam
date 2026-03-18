@@ -533,6 +533,126 @@ def team_status(
     _output(data, _human)
 
 
+@team_app.command("snapshot")
+def team_snapshot(
+    team: str = typer.Argument(..., help="Team name"),
+    tag: str = typer.Option("", "--tag", "-t", help="Label for this snapshot"),
+):
+    """Save a snapshot of the entire team state (config, tasks, events, sessions, costs)."""
+    from clawteam.team.snapshot import SnapshotManager
+
+    try:
+        meta = SnapshotManager(team).create(tag=tag)
+    except ValueError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    data = json.loads(meta.model_dump_json(by_alias=True))
+
+    def _human(d):
+        console.print(f"[green]OK[/green] Snapshot [cyan]{d['id']}[/cyan] created")
+        console.print(
+            f"  {d['taskCount']} tasks, {d['eventCount']} events, "
+            f"{d['sessionCount']} sessions, {d['costEventCount']} cost events"
+        )
+
+    _output(data, _human)
+
+
+@team_app.command("snapshots")
+def team_snapshots(
+    team: str = typer.Argument(..., help="Team name"),
+):
+    """List available snapshots for a team."""
+    from clawteam.team.snapshot import SnapshotManager
+
+    snaps = SnapshotManager(team).list_snapshots()
+    data = [json.loads(s.model_dump_json(by_alias=True)) for s in snaps]
+
+    def _human(items):
+        if not items:
+            console.print("[dim]No snapshots found[/dim]")
+            return
+        table = Table(title=f"Snapshots for {team}")
+        table.add_column("ID", style="cyan")
+        table.add_column("Tag")
+        table.add_column("Members", justify="right")
+        table.add_column("Tasks", justify="right")
+        table.add_column("Events", justify="right")
+        table.add_column("Created", style="dim")
+        for s in items:
+            table.add_row(
+                s["id"],
+                s.get("tag", ""),
+                str(s["memberCount"]),
+                str(s["taskCount"]),
+                str(s["eventCount"]),
+                s["createdAt"][:19],
+            )
+        console.print(table)
+
+    _output(data, _human)
+
+
+@team_app.command("restore")
+def team_restore(
+    team: str = typer.Argument(..., help="Team name"),
+    snapshot_id: str = typer.Argument(..., help="Snapshot ID to restore"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview without writing"),
+    force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
+):
+    """Restore team state from a snapshot."""
+    from clawteam.team.snapshot import SnapshotManager
+
+    mgr = SnapshotManager(team)
+
+    try:
+        summary = mgr.restore(snapshot_id, dry_run=True)
+    except ValueError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    if dry_run:
+        _output(summary, lambda d: console.print(
+            f"[yellow]Dry run[/yellow] Would restore: "
+            f"{d['tasks']} tasks, {d['events']} events, "
+            f"{d['sessions']} sessions, {d['costs']} costs, "
+            f"{d['inboxes']} inbox messages"
+        ))
+        return
+
+    if not force and not _json_output:
+        console.print(
+            f"Will restore: {summary['tasks']} tasks, {summary['events']} events, "
+            f"{summary['sessions']} sessions, {summary['costs']} costs"
+        )
+        if not typer.confirm("Proceed?"):
+            raise typer.Abort()
+
+    result = mgr.restore(snapshot_id)
+    _output(result, lambda d: console.print(
+        f"[green]OK[/green] Restored from snapshot [cyan]{snapshot_id}[/cyan]"
+    ))
+
+
+@team_app.command("snapshot-delete")
+def team_snapshot_delete(
+    team: str = typer.Argument(..., help="Team name"),
+    snapshot_id: str = typer.Argument(..., help="Snapshot ID to delete"),
+):
+    """Delete a snapshot."""
+    from clawteam.team.snapshot import SnapshotManager
+
+    if SnapshotManager(team).delete(snapshot_id):
+        _output(
+            {"status": "deleted", "id": snapshot_id},
+            lambda d: console.print(f"[green]OK[/green] Snapshot '{snapshot_id}' deleted"),
+        )
+    else:
+        console.print(f"[yellow]Snapshot '{snapshot_id}' not found[/yellow]")
+        raise typer.Exit(1)
+
+
 # ============================================================================
 # Inbox Commands
 # ============================================================================
