@@ -21,7 +21,7 @@
   <a href="https://github.com/HKUDS/.github/blob/main/profile/README.md"><img src="https://img.shields.io/badge/微信-交流群-C5EAB4?style=flat&logo=wechat&logoColor=white" alt="WeChat"></a>
 </p>
 
-**一行命令**：给 Agent 一个目标，它自动组建团队完成任务。支持 [Claude Code](https://claude.ai/claude-code)、[Codex](https://openai.com/codex)、[OpenClaw](https://github.com/nicepkg/OpenClaw)、[nanobot](https://github.com/HKUDS/nanobot)、[Cursor](https://cursor.com) 及任意 CLI Agent。&nbsp;&nbsp;[**English**](README.md)
+**一行命令**：给 Agent 一个目标，它自动组建团队完成任务。支持 [Claude Code](https://claude.ai/claude-code)、[Codex](https://openai.com/codex)、[OpenClaw](https://github.com/openclaw/openclaw)、[nanobot](https://github.com/HKUDS/nanobot)、[Cursor](https://cursor.com) 及任意 CLI Agent。&nbsp;&nbsp;[**English**](README.md)
 
 <p align="center">
   <img src="assets/teaser.png" alt="ClawTeam - Agent 群体智能" width="800">
@@ -334,7 +334,7 @@ clawteam board attach my-team
 |-------|---------|------|
 | [Claude Code](https://claude.ai/claude-code) | `clawteam spawn tmux claude --team ...` | ✅ 完全支持 |
 | [Codex](https://openai.com/codex) | `clawteam spawn tmux codex --team ...` | ✅ 完全支持 |
-| [OpenClaw](https://github.com/nicepkg/OpenClaw) | `clawteam spawn tmux openclaw --team ...` | ✅ 完全支持 |
+| [OpenClaw](https://github.com/openclaw/openclaw) | `clawteam spawn tmux openclaw --team ...` | ✅ 完全支持 |
 | [nanobot](https://github.com/HKUDS/nanobot) | `clawteam spawn tmux nanobot --team ...` | ✅ 完全支持 |
 | [Cursor](https://cursor.com) | `clawteam spawn subprocess cursor --team ...` | 🔮 实验性 |
 | 自定义脚本 | `clawteam spawn subprocess python --team ...` | ✅ 完全支持 |

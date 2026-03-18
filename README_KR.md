@@ -25,7 +25,7 @@
 
 사람은 목표만 제시하면 됩니다. 나머지는 에이전트 팀이 조율합니다.
 
-[Claude Code](https://claude.ai/claude-code), [Codex](https://openai.com/codex), [OpenClaw](https://github.com/nicepkg/OpenClaw), [nanobot](https://github.com/HKUDS/nanobot), [Cursor](https://cursor.com) 그리고 각종 CLI 에이전트와 폭넓게 호환됩니다.&nbsp;&nbsp;[**English**](README.md) | [**中文文档**](README_CN.md)
+[Claude Code](https://claude.ai/claude-code), [Codex](https://openai.com/codex), [OpenClaw](https://github.com/openclaw/openclaw), [nanobot](https://github.com/HKUDS/nanobot), [Cursor](https://cursor.com) 그리고 각종 CLI 에이전트와 폭넓게 호환됩니다.&nbsp;&nbsp;[**English**](README.md) | [**中文文档**](README_CN.md)
 
 <p align="center">
   <img src="assets/teaser.png" alt="ClawTeam - AI agents orchestrating themselves" width="800">
@@ -389,7 +389,7 @@ ClawTeam은 셸 명령을 실행할 수 있는 **어떤 CLI 에이전트**와도
 |-------|--------------|--------|
 | [Claude Code](https://claude.ai/claude-code) | `clawteam spawn tmux claude --team ...` | ✅ 완전 지원 |
 | [Codex](https://openai.com/codex) | `clawteam spawn tmux codex --team ...` | ✅ 완전 지원 |
-| [OpenClaw](https://github.com/nicepkg/OpenClaw) | `clawteam spawn tmux openclaw --team ...` | ✅ 완전 지원 |
+| [OpenClaw](https://github.com/openclaw/openclaw) | `clawteam spawn tmux openclaw --team ...` | ✅ 완전 지원 |
 | [nanobot](https://github.com/HKUDS/nanobot) | `clawteam spawn tmux nanobot --team ...` | ✅ 완전 지원 |
 | [Cursor](https://cursor.com) | `clawteam spawn subprocess cursor --team ...` | 🔮 실험적 |
 | Custom scripts | `clawteam spawn subprocess python --team ...` | ✅ 완전 지원 |

@@ -25,7 +25,7 @@
 
 Human provides the goal. The Agent Team orchestrates everything else.
 
-Full compatibility with [Claude Code](https://claude.ai/claude-code), [Codex](https://openai.com/codex), [OpenClaw](https://github.com/nicepkg/OpenClaw), [nanobot]([https://github.com/HKUDS/nanobot](https://github.com/HKUDS/nanobot)), [Cursor](https://cursor.com), and any CLI agent.&nbsp;&nbsp;[**中文文档**](README_CN.md) | [**한국어**](README_KR.md)
+Full compatibility with [Claude Code](https://claude.ai/claude-code), [Codex](https://openai.com/codex), [OpenClaw](https://github.com/openclaw/openclaw), [nanobot](https://github.com/HKUDS/nanobot), [Cursor](https://cursor.com), and any CLI agent.&nbsp;&nbsp;[**中文文档**](README_CN.md) | [**한국어**](README_KR.md)
 
 ---
 
@@ -391,7 +391,7 @@ ClawTeam works with **any CLI agent** that can execute shell commands:
 |-------|--------------|--------|
 | [Claude Code](https://claude.ai/claude-code) | `clawteam spawn tmux claude --team ...` | ✅ Full support |
 | [Codex](https://openai.com/codex) | `clawteam spawn tmux codex --team ...` | ✅ Full support |
-| [OpenClaw](https://github.com/nicepkg/OpenClaw) | `clawteam spawn tmux openclaw --team ...` | ✅ Full support |
+| [OpenClaw](https://github.com/openclaw/openclaw) | `clawteam spawn tmux openclaw --team ...` | ✅ Full support |
 | [nanobot](https://github.com/HKUDS/nanobot) | `clawteam spawn tmux nanobot --team ...` | ✅ Full support |
 | [Cursor](https://cursor.com) | `clawteam spawn subprocess cursor --team ...` | 🔮 Experimental |
 | Custom scripts | `clawteam spawn subprocess python --team ...` | ✅ Full support |
