@@ -10,3 +10,4 @@ build/
 .venv/
 venv/
 .claude/*.local.md
+uv.lock
