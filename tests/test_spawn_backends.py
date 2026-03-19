@@ -79,14 +79,17 @@ def test_tmux_backend_exports_spawn_path_for_agent_commands(monkeypatch, tmp_pat
         return Result(returncode=0)
 
     original_which = __import__("shutil").which
-    monkeypatch.setattr(
-        "clawteam.spawn.tmux_backend.shutil.which",
-        lambda name, path=None: "/opt/homebrew/bin/tmux" if name == "tmux" else original_which(name),
-    )
-    monkeypatch.setattr(
-        "clawteam.spawn.command_validation.shutil.which",
-        lambda name, path=None: "/usr/bin/codex" if name == "codex" else original_which(name),
-    )
+
+    def fake_which(name, path=None):
+        if name == "tmux":
+            return "/opt/homebrew/bin/tmux"
+        if name == "codex":
+            return "/usr/bin/codex"
+        return original_which(name)
+
+    # Both modules share the same shutil object, so a single setattr
+    # covers tmux_backend.shutil.which AND command_validation.shutil.which.
+    monkeypatch.setattr("clawteam.spawn.tmux_backend.shutil.which", fake_which)
     monkeypatch.setattr("clawteam.spawn.tmux_backend.subprocess.run", fake_run)
     monkeypatch.setattr("clawteam.spawn.tmux_backend.time.sleep", lambda *_: None)
     monkeypatch.setattr("clawteam.spawn.registry.register_agent", lambda **_: None)
