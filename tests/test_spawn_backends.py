@@ -6,7 +6,12 @@ import sys
 
 from clawteam.spawn.cli_env import build_spawn_path, resolve_clawteam_executable
 from clawteam.spawn.subprocess_backend import SubprocessBackend
-from clawteam.spawn.tmux_backend import TmuxBackend, _confirm_workspace_trust_if_prompted
+from clawteam.spawn.tmux_backend import (
+    TmuxBackend,
+    _check_cli_ready_indicators,
+    _confirm_workspace_trust_if_prompted,
+    _wait_for_cli_ready,
+)
 
 
 class DummyProcess:
@@ -506,3 +511,274 @@ def test_resolve_clawteam_executable_accepts_relative_path_with_explicit_directo
 
     assert resolve_clawteam_executable() == str(relative_bin.resolve())
     assert build_spawn_path("/usr/bin:/bin").startswith(f"{relative_bin.parent.resolve()}:")
+
+
+# ---------------------------------------------------------------------------
+# Tests for _check_cli_ready_indicators
+# ---------------------------------------------------------------------------
+
+class TestCheckCliReadyIndicators:
+    def test_detects_prompt_chars(self):
+        assert _check_cli_ready_indicators(["claude"], ["❯ "]) is True
+        assert _check_cli_ready_indicators(["kimi"], ["> "]) is True
+        assert _check_cli_ready_indicators(["qwen"], ["› "]) is True
+        assert _check_cli_ready_indicators(["opencode"], ["> "]) is True
+
+    def test_detects_claude_hint(self):
+        assert _check_cli_ready_indicators(["claude"], ["Try asking: write a test for utils.py"]) is True
+
+    def test_rejects_loading_output(self):
+        assert _check_cli_ready_indicators(["kimi"], ["Loading model..."]) is False
+        assert _check_cli_ready_indicators(["kimi"], ["Initializing..."]) is False
+
+    def test_empty_lines(self):
+        assert _check_cli_ready_indicators(["claude"], []) is False
+
+    def test_works_for_unknown_cli(self):
+        assert _check_cli_ready_indicators(["my-agent"], ["> ready"]) is True
+        assert _check_cli_ready_indicators(["my-agent"], ["thinking..."]) is False
+
+
+# ---------------------------------------------------------------------------
+# Tests for _wait_for_cli_ready with generic stabilization
+# ---------------------------------------------------------------------------
+
+class TestWaitForCliReady:
+    def test_returns_true_on_prompt_indicator(self, monkeypatch):
+        class Result:
+            def __init__(self, stdout=""):
+                self.returncode = 0
+                self.stdout = stdout
+
+        call_count = 0
+
+        def fake_run(args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return Result("Loading...\n")
+            return Result("❯ \n")
+
+        monkeypatch.setattr("clawteam.spawn.tmux_backend.subprocess.run", fake_run)
+        monkeypatch.setattr("clawteam.spawn.tmux_backend.time.sleep", lambda *_: None)
+        monkeypatch.setattr("clawteam.spawn.tmux_backend.time.monotonic", _make_monotonic([0, 1, 2]))
+
+        assert _wait_for_cli_ready("t:a", ["kimi"], timeout_seconds=10) is True
+
+    def test_falls_back_to_stabilization(self, monkeypatch):
+        """When no prompt indicator is found, content stabilization triggers."""
+        class Result:
+            def __init__(self, stdout=""):
+                self.returncode = 0
+                self.stdout = stdout
+
+        def fake_run(args, **kwargs):
+            return Result("Welcome to MyAgent\nType your query:\n")
+
+        monkeypatch.setattr("clawteam.spawn.tmux_backend.subprocess.run", fake_run)
+        monkeypatch.setattr("clawteam.spawn.tmux_backend.time.sleep", lambda *_: None)
+        # 5 calls: 0, 1, 2, 3, 4 -> stable after 3 identical checks
+        monkeypatch.setattr("clawteam.spawn.tmux_backend.time.monotonic", _make_monotonic([0, 1, 2, 3, 4]))
+
+        assert _wait_for_cli_ready("t:a", ["unknown-cli"], timeout_seconds=10) is True
+
+    def test_returns_false_on_timeout(self, monkeypatch):
+        class Result:
+            def __init__(self, stdout=""):
+                self.returncode = 0
+                self.stdout = stdout
+
+        call_count = 0
+
+        def fake_run(args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return Result(f"Loading... step {call_count}\n")
+
+        monkeypatch.setattr("clawteam.spawn.tmux_backend.subprocess.run", fake_run)
+        monkeypatch.setattr("clawteam.spawn.tmux_backend.time.sleep", lambda *_: None)
+        monkeypatch.setattr("clawteam.spawn.tmux_backend.time.monotonic", _make_monotonic([0, 50]))
+
+        assert _wait_for_cli_ready("t:a", ["kimi"], timeout_seconds=5) is False
+
+
+def _make_monotonic(times: list[float]):
+    """Create a fake time.monotonic that returns values from a list then repeats the last."""
+    idx = [0]
+    def _monotonic():
+        val = times[min(idx[0], len(times) - 1)]
+        idx[0] += 1
+        return val
+    return _monotonic
+
+
+# ---------------------------------------------------------------------------
+# Tests for skip-permissions flags on new CLIs
+# ---------------------------------------------------------------------------
+
+def test_subprocess_backend_kimi_skip_permissions(monkeypatch, tmp_path):
+    """Kimi gets --yolo for skip_permissions."""
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    clawteam_bin = tmp_path / "venv" / "bin" / "clawteam"
+    clawteam_bin.parent.mkdir(parents=True)
+    clawteam_bin.write_text("#!/bin/sh\n")
+    monkeypatch.setattr(sys, "argv", [str(clawteam_bin)])
+
+    captured: dict[str, object] = {}
+
+    def fake_popen(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return DummyProcess()
+
+    monkeypatch.setattr(
+        "clawteam.spawn.command_validation.shutil.which",
+        lambda name, path=None: "/usr/bin/kimi" if name == "kimi" else None,
+    )
+    monkeypatch.setattr("clawteam.spawn.subprocess_backend.subprocess.Popen", fake_popen)
+    monkeypatch.setattr("clawteam.spawn.registry.register_agent", lambda **_: None)
+
+    backend = SubprocessBackend()
+    backend.spawn(
+        command=["kimi"],
+        agent_name="worker",
+        agent_id="a1",
+        agent_type="general-purpose",
+        team_name="team",
+        prompt="do stuff",
+        skip_permissions=True,
+    )
+
+    assert "kimi --yolo -p 'do stuff'" in captured["cmd"]
+
+
+def test_subprocess_backend_qwen_skip_permissions(monkeypatch, tmp_path):
+    """Qwen gets --dangerously-skip-permissions."""
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    clawteam_bin = tmp_path / "venv" / "bin" / "clawteam"
+    clawteam_bin.parent.mkdir(parents=True)
+    clawteam_bin.write_text("#!/bin/sh\n")
+    monkeypatch.setattr(sys, "argv", [str(clawteam_bin)])
+
+    captured: dict[str, object] = {}
+
+    def fake_popen(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return DummyProcess()
+
+    monkeypatch.setattr(
+        "clawteam.spawn.command_validation.shutil.which",
+        lambda name, path=None: "/usr/bin/qwen" if name == "qwen" else None,
+    )
+    monkeypatch.setattr("clawteam.spawn.subprocess_backend.subprocess.Popen", fake_popen)
+    monkeypatch.setattr("clawteam.spawn.registry.register_agent", lambda **_: None)
+
+    backend = SubprocessBackend()
+    backend.spawn(
+        command=["qwen"],
+        agent_name="worker",
+        agent_id="a1",
+        agent_type="general-purpose",
+        team_name="team",
+        prompt="do stuff",
+        skip_permissions=True,
+    )
+
+    assert "qwen --dangerously-skip-permissions -p 'do stuff'" in captured["cmd"]
+
+
+def test_subprocess_backend_opencode_skip_permissions(monkeypatch, tmp_path):
+    """OpenCode gets --yolo."""
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    clawteam_bin = tmp_path / "venv" / "bin" / "clawteam"
+    clawteam_bin.parent.mkdir(parents=True)
+    clawteam_bin.write_text("#!/bin/sh\n")
+    monkeypatch.setattr(sys, "argv", [str(clawteam_bin)])
+
+    captured: dict[str, object] = {}
+
+    def fake_popen(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return DummyProcess()
+
+    monkeypatch.setattr(
+        "clawteam.spawn.command_validation.shutil.which",
+        lambda name, path=None: "/usr/bin/opencode" if name == "opencode" else None,
+    )
+    monkeypatch.setattr("clawteam.spawn.subprocess_backend.subprocess.Popen", fake_popen)
+    monkeypatch.setattr("clawteam.spawn.registry.register_agent", lambda **_: None)
+
+    backend = SubprocessBackend()
+    backend.spawn(
+        command=["opencode"],
+        agent_name="worker",
+        agent_id="a1",
+        agent_type="general-purpose",
+        team_name="team",
+        prompt="do stuff",
+        skip_permissions=True,
+    )
+
+    assert "opencode --yolo -p 'do stuff'" in captured["cmd"]
+
+
+def test_tmux_backend_kimi_uses_wait_and_buffer_injection(monkeypatch, tmp_path):
+    """Kimi in tmux uses _wait_for_cli_ready + buffer-based prompt injection."""
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    clawteam_bin = tmp_path / "venv" / "bin" / "clawteam"
+    clawteam_bin.parent.mkdir(parents=True)
+    clawteam_bin.write_text("#!/bin/sh\n")
+    monkeypatch.setattr(sys, "argv", [str(clawteam_bin)])
+
+    run_calls: list[list[str]] = []
+
+    class Result:
+        def __init__(self, returncode: int = 0, stdout: str = ""):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = ""
+
+    def fake_run(args, **kwargs):
+        run_calls.append(args)
+        if args[:3] == ["tmux", "has-session", "-t"]:
+            return Result(returncode=1)
+        if args[:3] == ["tmux", "list-panes", "-t"]:
+            return Result(returncode=0, stdout="9876\n")
+        if args[:4] == ["tmux", "capture-pane", "-p", "-t"]:
+            return Result(stdout="❯ \n")
+        return Result(returncode=0)
+
+    def fake_which(name, path=None):
+        if name == "tmux":
+            return "/usr/bin/tmux"
+        if name == "kimi":
+            return "/usr/bin/kimi"
+        return None
+
+    monkeypatch.setattr("clawteam.spawn.tmux_backend.shutil.which", fake_which)
+    monkeypatch.setattr("clawteam.spawn.command_validation.shutil.which", fake_which)
+    monkeypatch.setattr("clawteam.spawn.tmux_backend.subprocess.run", fake_run)
+    monkeypatch.setattr("clawteam.spawn.tmux_backend.time.sleep", lambda *_: None)
+    monkeypatch.setattr("clawteam.spawn.tmux_backend.time.monotonic", _make_monotonic([0, 1, 2]))
+    monkeypatch.setattr("clawteam.spawn.registry.register_agent", lambda **_: None)
+
+    backend = TmuxBackend()
+    result = backend.spawn(
+        command=["kimi"],
+        agent_name="worker",
+        agent_id="a1",
+        agent_type="general-purpose",
+        team_name="team",
+        prompt="do work",
+        skip_permissions=True,
+    )
+
+    assert "spawned in tmux" in result
+
+    new_session = next(call for call in run_calls if call[:3] == ["tmux", "new-session", "-d"])
+    full_cmd = new_session[-1]
+    assert " kimi --yolo;" in full_cmd
+
+    load_buffer_calls = [c for c in run_calls if len(c) >= 3 and c[1] == "load-buffer"]
+    assert len(load_buffer_calls) == 1
+    paste_buffer_calls = [c for c in run_calls if len(c) >= 3 and c[1] == "paste-buffer"]
+    assert len(paste_buffer_calls) == 1

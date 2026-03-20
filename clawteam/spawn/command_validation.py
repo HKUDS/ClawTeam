@@ -82,6 +82,21 @@ def is_gemini_command(command: list[str]) -> bool:
     return _cmd_basename(command) == "gemini"
 
 
+def is_kimi_command(command: list[str]) -> bool:
+    """Check if the command is a Kimi Code CLI invocation (MoonshotAI)."""
+    return _cmd_basename(command) == "kimi"
+
+
+def is_qwen_command(command: list[str]) -> bool:
+    """Check if the command is a Qwen Code CLI invocation (Alibaba)."""
+    return _cmd_basename(command) in ("qwen", "qwen-code")
+
+
+def is_opencode_command(command: list[str]) -> bool:
+    """Check if the command is an OpenCode CLI invocation."""
+    return _cmd_basename(command) == "opencode"
+
+
 def is_interactive_cli(command: list[str]) -> bool:
     """Check if the command is an interactive AI CLI."""
     return (
@@ -89,6 +104,9 @@ def is_interactive_cli(command: list[str]) -> bool:
         or is_codex_command(command)
         or is_nanobot_command(command)
         or is_gemini_command(command)
+        or is_kimi_command(command)
+        or is_qwen_command(command)
+        or is_opencode_command(command)
     )
 
 

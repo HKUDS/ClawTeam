@@ -16,7 +16,10 @@ from clawteam.spawn.command_validation import (
     is_claude_command,
     is_codex_command,
     is_gemini_command,
+    is_kimi_command,
     is_nanobot_command,
+    is_opencode_command,
+    is_qwen_command,
     normalize_spawn_command,
     validate_spawn_command,
 )
@@ -83,11 +86,11 @@ class TmuxBackend(SpawnBackend):
         # Build the command (without prompt — we'll send it via send-keys)
         final_command = list(normalized_command)
         if skip_permissions:
-            if is_claude_command(normalized_command):
+            if is_claude_command(normalized_command) or is_qwen_command(normalized_command):
                 final_command.append("--dangerously-skip-permissions")
             elif is_codex_command(normalized_command):
                 final_command.append("--dangerously-bypass-approvals-and-sandbox")
-            elif is_gemini_command(normalized_command):
+            elif is_gemini_command(normalized_command) or is_kimi_command(normalized_command) or is_opencode_command(normalized_command):
                 final_command.append("--yolo")
 
         if is_nanobot_command(normalized_command):
@@ -156,56 +159,17 @@ class TmuxBackend(SpawnBackend):
 
         _confirm_workspace_trust_if_prompted(target, normalized_command)
 
-        # Send the prompt as input to the interactive claude session
-        # (codex prompt is passed as positional arg above, so skip here)
-        if prompt and is_claude_command(normalized_command):
-            # Wait for Claude Code to finish startup and show input prompt.
-            # Bedrock-backed instances can take 10+ seconds to initialize.
-            _wait_for_claude_ready(target, timeout_seconds=30)
-            # Write prompt to a temp file and use load-buffer + paste-buffer
-            # to avoid escaping issues for multi-line prompts.
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".txt", delete=False, prefix="clawteam-prompt-"
-            ) as f:
-                f.write(prompt)
-                tmp_path = f.name
-            subprocess.run(
-                ["tmux", "load-buffer", "-b", f"prompt-{agent_name}", tmp_path],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            subprocess.run(
-                ["tmux", "paste-buffer", "-b", f"prompt-{agent_name}", "-t", target],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            # Claude interactive mode needs Enter twice after paste:
-            # first to confirm the pasted text, second to submit.
-            time.sleep(0.5)
-            subprocess.run(
-                ["tmux", "send-keys", "-t", target, "Enter"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            time.sleep(0.3)
-            subprocess.run(
-                ["tmux", "send-keys", "-t", target, "Enter"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            subprocess.run(
-                ["tmux", "delete-buffer", "-b", f"prompt-{agent_name}"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            os.unlink(tmp_path)
-        elif prompt and not is_codex_command(normalized_command) and not is_nanobot_command(normalized_command) and not is_gemini_command(normalized_command):
-            time.sleep(1)
-            subprocess.run(
-                ["tmux", "send-keys", "-t", target, prompt, "Enter"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
+        # Inject prompt into the interactive TUI session.
+        # CLIs whose prompt was already passed as a CLI argument (codex,
+        # nanobot, gemini) are skipped here.
+        _prompt_already_set = (
+            is_codex_command(normalized_command)
+            or is_nanobot_command(normalized_command)
+            or is_gemini_command(normalized_command)
+        )
+        if prompt and not _prompt_already_set:
+            _wait_for_cli_ready(target, normalized_command, timeout_seconds=30)
+            _inject_prompt_via_buffer(target, agent_name, prompt, normalized_command)
 
         self._agents[agent_name] = target
 
@@ -373,20 +337,26 @@ def _looks_like_workspace_trust_prompt(command: list[str], pane_text: str) -> bo
     return False
 
 
-def _wait_for_claude_ready(
+def _wait_for_cli_ready(
     target: str,
+    command: list[str],
     timeout_seconds: float = 30.0,
     poll_interval: float = 1.0,
 ) -> bool:
-    """Poll tmux pane until Claude Code shows an input prompt.
+    """Poll tmux pane until the CLI shows an input prompt.
 
-    Claude Code displays a ``>`` or ``❯`` prompt character when ready for
-    input.  Bedrock-backed instances can take 10+ seconds to initialize,
-    so the old fixed ``sleep(2)`` was insufficient.
+    Uses CLI-specific prompt indicators when available, then falls back
+    to a generic "pane content stabilized" heuristic so that future CLIs
+    work without code changes.
 
     Returns True if ready detected, False on timeout (caller should
     still attempt injection as a best-effort).
     """
+    prev_snapshot: str | None = None
+    stable_count = 0
+    # After 3 consecutive identical snapshots (~3 s) the TUI is likely idle.
+    stable_threshold = 3
+
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
         pane = subprocess.run(
@@ -394,16 +364,91 @@ def _wait_for_claude_ready(
             capture_output=True,
             text=True,
         )
-        if pane.returncode == 0:
-            text = pane.stdout
-            lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-            tail = lines[-10:] if len(lines) >= 10 else lines
-            for line in tail:
-                # Claude Code shows these prompt characters when ready
-                if line.startswith(("❯", ">", "›")):
-                    return True
-                # Also detect the "Try ..." hint line
-                if "Try " in line and "write a test" in line:
-                    return True
+        if pane.returncode != 0:
+            time.sleep(poll_interval)
+            continue
+
+        text = pane.stdout
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        tail = lines[-10:] if len(lines) >= 10 else lines
+
+        if _check_cli_ready_indicators(command, tail):
+            return True
+
+        # Generic fallback: content stabilization
+        snapshot = "\n".join(tail)
+        if snapshot and snapshot == prev_snapshot:
+            stable_count += 1
+            if stable_count >= stable_threshold:
+                return True
+        else:
+            stable_count = 0
+        prev_snapshot = snapshot
+
         time.sleep(poll_interval)
     return False
+
+
+def _check_cli_ready_indicators(command: list[str], tail_lines: list[str]) -> bool:
+    """Return True if the tail lines contain known ready indicators for
+    the given CLI."""
+    # Claude, qwen, kimi, and opencode all use TUI prompt characters.
+    # The indicators below are shared across most modern AI CLI tools.
+    for line in tail_lines:
+        if line.startswith(("❯", ">", "›", "$", "%")):
+            return True
+        # Claude Code hint line
+        if "Try " in line and "write a test" in line:
+            return True
+    return False
+
+
+def _inject_prompt_via_buffer(
+    target: str,
+    agent_name: str,
+    prompt: str,
+    command: list[str],
+) -> None:
+    """Inject a prompt into a tmux pane using load-buffer / paste-buffer.
+
+    This is safer than send-keys for multi-line prompts and avoids
+    escaping issues with special characters.
+    """
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".txt", delete=False, prefix="clawteam-prompt-"
+    ) as f:
+        f.write(prompt)
+        tmp_path = f.name
+
+    buf_name = f"prompt-{agent_name}"
+    try:
+        subprocess.run(
+            ["tmux", "load-buffer", "-b", buf_name, tmp_path],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        subprocess.run(
+            ["tmux", "paste-buffer", "-b", buf_name, "-t", target],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        # Most interactive CLIs need Enter to submit after paste.
+        # Claude specifically needs a double-Enter (confirm + submit).
+        time.sleep(0.5)
+        subprocess.run(
+            ["tmux", "send-keys", "-t", target, "Enter"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        if is_claude_command(command) or is_qwen_command(command):
+            time.sleep(0.3)
+            subprocess.run(
+                ["tmux", "send-keys", "-t", target, "Enter"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+    finally:
+        subprocess.run(
+            ["tmux", "delete-buffer", "-b", buf_name],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
