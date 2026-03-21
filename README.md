@@ -505,6 +505,9 @@ All examples below assume the corresponding CLI already runs standalone on your 
 | [Cursor](https://cursor.com) | `clawteam spawn subprocess cursor --team ...` | 🔮 Experimental |
 | Custom scripts | `clawteam spawn subprocess python --team ...` | ✅ Full support |
 
+OpenClaw commands are normalized to `openclaw agent --message ...` automatically.
+For headless/report-style workflows, prefer `subprocess` or a dedicated `profile`.
+
 For provider-aware setups such as Claude Code via Moonshot Kimi or Gemini via
 Vertex, use `profile` + `preset` and then spawn with `--profile`.
 

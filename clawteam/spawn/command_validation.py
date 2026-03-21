@@ -47,6 +47,8 @@ def normalize_spawn_command(command: list[str]) -> list[str]:
     executable = Path(command[0]).name
     if executable == "nanobot" and len(command) == 1:
         return [command[0], "agent"]
+    if executable == "openclaw" and len(command) == 1:
+        return [command[0], "agent"]
 
     return list(command)
 
@@ -90,6 +92,11 @@ def is_kimi_command(command: list[str]) -> bool:
 def is_qwen_command(command: list[str]) -> bool:
     """Check if the command is a Qwen Code CLI invocation."""
     return _cmd_basename(command) in ("qwen", "qwen-code")
+
+
+def is_openclaw_command(command: list[str]) -> bool:
+    """Check if the command is an OpenClaw CLI invocation."""
+    return _cmd_basename(command) == "openclaw"
 
 
 def is_opencode_command(command: list[str]) -> bool:

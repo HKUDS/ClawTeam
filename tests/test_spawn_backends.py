@@ -349,6 +349,96 @@ def test_subprocess_backend_normalizes_nanobot_and_uses_message_flag(monkeypatch
     assert "nanobot agent -w /tmp/demo -m 'do work'" in captured["cmd"]
 
 
+def test_tmux_backend_normalizes_bare_openclaw_and_uses_message_flag(monkeypatch, tmp_path):
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    clawteam_bin = tmp_path / "venv" / "bin" / "clawteam"
+    clawteam_bin.parent.mkdir(parents=True)
+    clawteam_bin.write_text("#!/bin/sh\n")
+    monkeypatch.setattr(sys, "argv", [str(clawteam_bin)])
+
+    run_calls: list[list[str]] = []
+
+    class Result:
+        def __init__(self, returncode: int = 0, stdout: str = ""):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = ""
+
+    def fake_run(args, **kwargs):
+        run_calls.append(args)
+        if args[:3] == ["tmux", "has-session", "-t"]:
+            return Result(returncode=1)
+        if args[:3] == ["tmux", "list-panes", "-t"]:
+            return Result(returncode=0, stdout="9876\n")
+        return Result(returncode=0)
+
+    def fake_which(name, path=None):
+        if name == "tmux":
+            return "/usr/bin/tmux"
+        if name == "openclaw":
+            return "/usr/bin/openclaw"
+        return None
+
+    monkeypatch.setattr("clawteam.spawn.tmux_backend.shutil.which", fake_which)
+    monkeypatch.setattr("clawteam.spawn.command_validation.shutil.which", fake_which)
+    monkeypatch.setattr("clawteam.spawn.tmux_backend.subprocess.run", fake_run)
+    monkeypatch.setattr("clawteam.spawn.tmux_backend.time.sleep", lambda *_: None)
+    monkeypatch.setattr("clawteam.spawn.registry.register_agent", lambda **_: None)
+
+    backend = TmuxBackend()
+    backend.spawn(
+        command=["openclaw"],
+        agent_name="worker1",
+        agent_id="agent-1",
+        agent_type="general-purpose",
+        team_name="demo-team",
+        prompt="do work",
+        cwd="/tmp/demo",
+        skip_permissions=True,
+    )
+
+    new_session = next(call for call in run_calls if call[:3] == ["tmux", "new-session", "-d"])
+    full_cmd = new_session[-1]
+    assert " openclaw agent --message 'do work';" in full_cmd
+    assert " openclaw agent -p 'do work';" not in full_cmd
+
+
+def test_subprocess_backend_normalizes_openclaw_and_uses_message_flag(monkeypatch, tmp_path):
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    clawteam_bin = tmp_path / "venv" / "bin" / "clawteam"
+    clawteam_bin.parent.mkdir(parents=True)
+    clawteam_bin.write_text("#!/bin/sh\n")
+    monkeypatch.setattr(sys, "argv", [str(clawteam_bin)])
+
+    captured: dict[str, object] = {}
+
+    def fake_popen(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return DummyProcess()
+
+    monkeypatch.setattr(
+        "clawteam.spawn.command_validation.shutil.which",
+        lambda name, path=None: "/usr/bin/openclaw" if name == "openclaw" else None,
+    )
+    monkeypatch.setattr("clawteam.spawn.subprocess_backend.subprocess.Popen", fake_popen)
+    monkeypatch.setattr("clawteam.spawn.registry.register_agent", lambda **_: None)
+
+    backend = SubprocessBackend()
+    backend.spawn(
+        command=["openclaw"],
+        agent_name="worker1",
+        agent_id="agent-1",
+        agent_type="general-purpose",
+        team_name="demo-team",
+        prompt="do work",
+        cwd="/tmp/demo",
+        skip_permissions=True,
+    )
+
+    assert "openclaw agent --message 'do work'" in captured["cmd"]
+    assert "openclaw agent -p 'do work'" not in captured["cmd"]
+
+
 def test_tmux_backend_gemini_skip_permissions_and_prompt(monkeypatch, tmp_path):
     """Gemini gets --yolo for permissions and -p for prompt."""
     monkeypatch.setenv("PATH", "/usr/bin:/bin")

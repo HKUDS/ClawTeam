@@ -18,7 +18,7 @@ class PreparedCommand:
 
 
 class NativeCliAdapter:
-    """Adapter for direct CLI runtimes such as claude, codex, gemini, kimi, nanobot, qwen, opencode."""
+    """Adapter for direct CLI runtimes such as claude, codex, gemini, kimi, nanobot, openclaw, qwen, opencode."""
 
     def prepare_command(
         self,
@@ -60,6 +60,8 @@ class NativeCliAdapter:
                 post_launch_prompt = prompt
             elif is_codex_command(normalized_command):
                 final_command.append(prompt)
+            elif is_openclaw_command(normalized_command):
+                final_command.extend(["--message", prompt])
             else:
                 final_command.extend(["-p", prompt])
 
@@ -105,6 +107,11 @@ def is_kimi_command(command: list[str]) -> bool:
 def is_qwen_command(command: list[str]) -> bool:
     """Check if the command is a Qwen Code CLI invocation."""
     return command_basename(command) in ("qwen", "qwen-code")
+
+
+def is_openclaw_command(command: list[str]) -> bool:
+    """Check if the command is an OpenClaw CLI invocation."""
+    return command_basename(command) == "openclaw"
 
 
 def is_opencode_command(command: list[str]) -> bool:
