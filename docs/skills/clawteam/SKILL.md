@@ -35,7 +35,7 @@ Requires Python 3.10+. For P2P transport support: `pip install clawteam[p2p]`.
 ## Prerequisites
 
 - `tmux` installed (default spawn backend)
-- A CLI coding agent such as `claude`, `codex`, `gemini`, `kimi`, or `nanobot`
+- A CLI coding agent such as `claude`, `codex`, `gemini`, `kimi`, `nanobot`, or `openclaw`
 - A git repository for worktree isolation and context features
 - Default dependencies installed if you want the TUI wizard (`clawteam profile wizard`)
 
@@ -187,6 +187,10 @@ Common validated CLIs include:
 - `gemini`
 - `kimi`
 - `nanobot`
+- `openclaw`
+
+OpenClaw commands are normalized to `openclaw agent --message ...` automatically.
+For headless/report-style workflows, prefer `subprocess` or a dedicated `profile`.
 
 Configure non-default providers through `profile` + `preset` instead of hardcoding env vars into prompts.
 

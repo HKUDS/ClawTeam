@@ -6,6 +6,7 @@ from clawteam.spawn.adapters import (
     NativeCliAdapter,
     command_basename,
     is_interactive_cli,
+    is_openclaw_command,
     is_opencode_command,
     is_qwen_command,
 )
@@ -26,6 +27,12 @@ class TestCLIDetection:
         assert is_opencode_command(["/opt/bin/opencode"])
         assert not is_opencode_command(["openai"])
         assert not is_opencode_command([])
+
+    def test_is_openclaw_command(self):
+        assert is_openclaw_command(["openclaw"])
+        assert is_openclaw_command(["/usr/local/bin/openclaw"])
+        assert not is_openclaw_command(["opencode"])
+        assert not is_openclaw_command([])
 
     def test_is_interactive_cli_covers_all_known(self):
         for cmd in ["claude", "codex", "nanobot", "gemini", "kimi", "qwen", "opencode"]:
@@ -83,6 +90,16 @@ class TestPrepareCommandPrompt:
         )
         assert "-p" in result.final_command
         assert "analyse this" in result.final_command
+        assert result.post_launch_prompt is None
+
+    def test_openclaw_prompt_uses_message_flag_and_normalizes_agent(self):
+        result = self.adapter.prepare_command(
+            ["openclaw"], prompt="analyse this",
+        )
+        assert result.final_command[:2] == ["openclaw", "agent"]
+        assert "--message" in result.final_command
+        assert "analyse this" in result.final_command
+        assert "-p" not in result.final_command
         assert result.post_launch_prompt is None
 
     def test_claude_interactive_gets_post_launch_prompt(self):
