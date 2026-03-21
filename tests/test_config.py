@@ -11,6 +11,7 @@ class TestClawTeamConfig:
         assert cfg.user == ""
         assert cfg.default_backend == "tmux"
         assert cfg.skip_permissions is True
+        assert cfg.timezone == "UTC"
         assert cfg.workspace == "auto"
         assert cfg.profiles == {}
         assert cfg.presets == {}
@@ -84,6 +85,12 @@ class TestGetEffective:
         monkeypatch.setenv("CLAWTEAM_DATA_DIR", "/custom/path")
         val, source = get_effective("data_dir")
         assert val == "/custom/path"
+        assert source == "env"
+
+    def test_timezone_env(self, monkeypatch):
+        monkeypatch.setenv("CLAWTEAM_TIMEZONE", "Asia/Shanghai")
+        val, source = get_effective("timezone")
+        assert val == "Asia/Shanghai"
         assert source == "env"
 
     def test_unknown_key_returns_empty(self):

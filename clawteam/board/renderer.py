@@ -12,6 +12,8 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from clawteam.timefmt import format_timestamp
+
 
 class BoardRenderer:
     """Renders board data using Rich."""
@@ -107,7 +109,7 @@ class BoardRenderer:
         header_text = (
             f"Leader: [cyan]{team.get('leaderName', team.get('leadAgentId', ''))}[/cyan]  |  "
             f"Members: [cyan]{len(members)}[/cyan]  |  "
-            f"Created: [dim]{team['createdAt'][:19]}[/dim]"
+            f"Created: [dim]{format_timestamp(team['createdAt'])}[/dim]"
         )
         cost = data.get("cost", {})
         total_cents = cost.get("totalCostCents", 0)
@@ -138,7 +140,7 @@ class BoardRenderer:
                 row.append(m.get("user", ""))
             row.extend([
                 m["agentType"],
-                m["joinedAt"][:19],
+                format_timestamp(m["joinedAt"]),
                 f"[{inbox_style}]{m['inboxCount']}[/{inbox_style}]",
             ])
             mem_table.add_row(*row)

@@ -17,6 +17,7 @@ from rich.console import Console
 from rich.table import Table
 
 from clawteam import __version__
+from clawteam.timefmt import format_timestamp
 
 app = typer.Typer(
     name="clawteam",
@@ -1402,7 +1403,7 @@ def team_status(
         console.print(f"\nTeam: [cyan]{d['name']}[/cyan]")
         if d['description']:
             console.print(f"  {d['description']}")
-        console.print(f"  Created: {d['createdAt'][:19]}")
+        console.print(f"  Created: {format_timestamp(d['createdAt'])}")
         has_user = any(m.get("user") for m in d["members"])
         table = Table(title="Members")
         table.add_column("Name", style="cyan")
@@ -1418,7 +1419,7 @@ def team_status(
             row.extend([
                 m.get("agentId", ""),
                 m.get("agentType", ""),
-                (m.get("joinedAt") or "")[:19],
+                format_timestamp(m.get("joinedAt")),
             ])
             table.add_row(*row)
         console.print(table)
@@ -1480,7 +1481,7 @@ def team_snapshots(
                 str(s["memberCount"]),
                 str(s["taskCount"]),
                 str(s["eventCount"]),
-                s["createdAt"][:19],
+                format_timestamp(s["createdAt"]),
             )
         console.print(table)
 
@@ -1632,7 +1633,7 @@ def inbox_receive(
             return
         for m in msgs:
             console.print(
-                f"[{m.get('timestamp', '')[:19]}] "
+                f"[{format_timestamp(m.get('timestamp', ''))}] "
                 f"[cyan]{m.get('type', '')}[/cyan] "
                 f"from={m.get('from', '')} : {m.get('content', '')}"
             )
@@ -1661,7 +1662,7 @@ def inbox_peek(
         console.print(f"Pending messages: {d['count']}")
         for m in d["messages"]:
             console.print(
-                f"  [{m.get('timestamp', '')[:19]}] "
+                f"  [{format_timestamp(m.get('timestamp', ''))}] "
                 f"[cyan]{m.get('type', '')}[/cyan] "
                 f"from={m.get('from', '')} : {(m.get('content') or '')[:80]}"
             )
@@ -1694,7 +1695,7 @@ def inbox_log(
         for m in d["messages"]:
             fr = m.get("from", "?")
             to = m.get("to", "all")
-            ts = (m.get("timestamp") or "")[:19]
+            ts = format_timestamp(m.get("timestamp") or "")
             mtype = m.get("type", "message")
             content = (m.get("content") or "")[:120]
             console.print(f"  [{ts}] [cyan]{fr}[/cyan] → {to} ({mtype}): {content}")
@@ -1809,7 +1810,7 @@ def task_get(
         if d.get('owner'):
             console.print(f"  Owner: {d['owner']}")
         if d.get('lockedBy'):
-            console.print(f"  Locked by: [yellow]{d['lockedBy']}[/yellow] (since {d.get('lockedAt', '')[:19]})")
+            console.print(f"  Locked by: [yellow]{d['lockedBy']}[/yellow] (since {format_timestamp(d.get('lockedAt', ''))})")
         if d.get('description'):
             console.print(f"  Description: {d['description']}")
         if d.get('blocks'):
@@ -2065,7 +2066,7 @@ def cost_show(
             table.add_column("Model", style="dim")
             for e in evts[-20:]:  # show last 20
                 table.add_row(
-                    (e.get("reportedAt") or "")[:19],
+                    format_timestamp(e.get("reportedAt")),
                     e.get("agentName", ""),
                     f"{e.get('inputTokens', 0):,}",
                     f"{e.get('outputTokens', 0):,}",
@@ -2302,7 +2303,7 @@ def session_show(
             console.print(f"Session: [cyan]{d.get('agentName', '')}[/cyan]"),
             console.print(f"  Session ID: {d.get('sessionId', '')}"),
             console.print(f"  Last task:  {d.get('lastTaskId', '')}"),
-            console.print(f"  Saved at:   {d.get('savedAt', '')[:19]}"),
+            console.print(f"  Saved at:   {format_timestamp(d.get('savedAt', ''))}"),
         ))
     else:
         sessions = store.list_sessions()
@@ -2322,7 +2323,7 @@ def session_show(
                     s.get("agentName", ""),
                     s.get("sessionId", ""),
                     s.get("lastTaskId", ""),
-                    (s.get("savedAt") or "")[:19],
+                    format_timestamp(s.get("savedAt")),
                 )
             console.print(table)
 
@@ -3154,7 +3155,7 @@ def workspace_list(
     table.add_column("Path")
     table.add_column("Created")
     for ws in workspaces:
-        table.add_row(ws.agent_name, ws.branch_name, ws.worktree_path, ws.created_at[:19])
+        table.add_row(ws.agent_name, ws.branch_name, ws.worktree_path, format_timestamp(ws.created_at))
     console.print(table)
 
 
@@ -3380,7 +3381,7 @@ def context_log(
             console.print("[dim]No commits found.[/dim]")
             return
         for entry in d:
-            ts = entry["timestamp"][:19]
+            ts = format_timestamp(entry["timestamp"])
             console.print(
                 f"[dim]{ts}[/dim] [cyan]{entry['agent']}[/cyan] "
                 f"[yellow]{entry['hash'][:8]}[/yellow] {entry['message']}"

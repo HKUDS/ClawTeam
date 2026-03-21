@@ -43,6 +43,7 @@ class ClawTeamConfig(BaseModel):
     workspace: str = "auto"  # "auto" | "always" | "never" | ""
     default_backend: str = "tmux"  # "tmux" | "subprocess"
     skip_permissions: bool = True  # pass --dangerously-skip-permissions to claude
+    timezone: str = "UTC"  # display timezone for human-readable timestamps
     gource_path: str = ""  # custom path to gource binary (auto-detected if empty)
     gource_resolution: str = "1280x720"  # default viewport resolution
     gource_seconds_per_day: float = 0.5  # animation speed
@@ -91,6 +92,7 @@ def get_effective(key: str) -> tuple[str, str]:
         "workspace": "CLAWTEAM_WORKSPACE",
         "default_backend": "CLAWTEAM_DEFAULT_BACKEND",
         "skip_permissions": "CLAWTEAM_SKIP_PERMISSIONS",
+        "timezone": "CLAWTEAM_TIMEZONE",
         "gource_path": "CLAWTEAM_GOURCE_PATH",
         "gource_resolution": "CLAWTEAM_GOURCE_RESOLUTION",
         "gource_seconds_per_day": "CLAWTEAM_GOURCE_SECONDS_PER_DAY",

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typer.testing import CliRunner
 
 from clawteam.cli.commands import app
-from clawteam.config import load_config
+from clawteam.config import ClawTeamConfig, load_config, save_config
 from clawteam.team.manager import TeamManager
 
 
@@ -88,3 +88,23 @@ def test_task_cli_supports_priority_create_update_and_list(tmp_path):
     )
     assert get_result.exit_code == 0
     assert "Priority: low" in get_result.output
+
+
+def test_team_status_uses_configured_timezone(tmp_path):
+    runner = CliRunner()
+    env = {
+        "HOME": str(tmp_path),
+        "CLAWTEAM_DATA_DIR": str(tmp_path / ".clawteam"),
+    }
+
+    save_config(ClawTeamConfig(timezone="Asia/Shanghai"))
+    TeamManager.create_team(
+        name="demo",
+        leader_name="leader",
+        leader_id="leader001",
+    )
+
+    result = runner.invoke(app, ["team", "status", "demo"], env=env)
+
+    assert result.exit_code == 0
+    assert "CST" in result.output
