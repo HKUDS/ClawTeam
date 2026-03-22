@@ -23,6 +23,7 @@ class AgentProfile(BaseModel):
     env: dict[str, str] = Field(default_factory=dict)
     env_map: dict[str, str] = Field(default_factory=dict)
     args: list[str] = Field(default_factory=list)
+    personality: str = ""  # Optional personality profile for role-specific behavior
 
 
 class AgentPreset(BaseModel):
@@ -33,6 +34,18 @@ class AgentPreset(BaseModel):
     base_url: str = ""
     env: dict[str, str] = Field(default_factory=dict)
     client_overrides: dict[str, AgentProfile] = Field(default_factory=dict)
+
+
+class TeamMemberConfig(BaseModel):
+    """Configuration for a team member referencing a profile."""
+    profile: str  # Reference to profiles[name]
+    personality: str = ""  # Optional override for member-specific personality
+
+
+class TeamProfileConfig(BaseModel):
+    """Configuration for a team with specialized members."""
+    leader: TeamMemberConfig
+    members: list[TeamMemberConfig] = Field(default_factory=list)
 
 
 class ClawTeamConfig(BaseModel):
@@ -49,6 +62,7 @@ class ClawTeamConfig(BaseModel):
     gource_seconds_per_day: float = 0.5  # animation speed
     profiles: dict[str, AgentProfile] = Field(default_factory=dict)
     presets: dict[str, AgentPreset] = Field(default_factory=dict)
+    team_profiles: dict[str, TeamProfileConfig] = Field(default_factory=dict)
     spawn_prompt_delay: float = 2.0  # fallback wait (seconds) if TUI ready-detection times out
     spawn_ready_timeout: float = 30.0  # max seconds to poll for TUI readiness before fallback
 

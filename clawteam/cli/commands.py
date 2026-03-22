@@ -1152,15 +1152,161 @@ def team_spawn_team(
         if identity.user:
             result["user"] = identity.user
         _output(result, lambda d: (
-            console.print(f"[green]OK[/green] Team '{name}' created"),
-            console.print(f"  Leader: {leader_name} (id: {leader_id})"),
-        ))
+             console.print(f"[green]OK[/green] Team '{name}' created"),
+             console.print(f"  Leader: {leader_name} (id: {leader_id})"),
+         ))
+     except ValueError as e:
+         if _json_output:
+             print(json.dumps({"error": str(e)}))
+         else:
+             console.print(f"[red]Error: {e}[/red]")
+         raise typer.Exit(1)
+
+
+@team_app.command("spawn-team-profile")
+def team_spawn_team_profile(
+    team_name: str = typer.Argument(..., help="Team name"),
+    team_profile: str = typer.Option(..., "--profile", "-p", help="Team profile name (from config)"),
+    backend: str = typer.Option("tmux", "--backend", "-b", help="Backend: tmux or subprocess"),
+):
+    """Spawn a team using a predefined team profile with specialized models.
+    
+    Team profiles are defined in ~/.clawteam/config.json under team_profiles.
+    Each member can use a different model/profile for cost optimization.
+    """
+    import uuid
+    from clawteam.config import get_effective
+    from clawteam.identity import AgentIdentity
+    from clawteam.spawn import get_backend
+    from clawteam.spawn.profiles import load_team_profile, apply_profile, load_profile
+    from clawteam.team.manager import TeamManager
+    
+    identity = AgentIdentity.from_env()
+    user_name = os.environ.get("CLAWTEAM_USER", "")
+    
+    # Load team profile
+    try:
+        leader_profile_name, member_configs = load_team_profile(team_profile)
     except ValueError as e:
-        if _json_output:
-            print(json.dumps({"error": str(e)}))
-        else:
-            console.print(f"[red]Error: {e}[/red]")
+        _output({"error": str(e)}, lambda d: console.print(f"[red]{d['error']}[/red]"))
         raise typer.Exit(1)
+    
+    # Resolve backend
+    if backend is None:
+        backend, _ = get_effective("default_backend")
+        backend = backend or "tmux"
+    
+    try:
+        be = get_backend(backend)
+    except ValueError as e:
+        _output({"error": str(e)}, lambda d: console.print(f"[red]{d['error']}[/red]"))
+        raise typer.Exit(1)
+    
+    # Spawn leader
+    leader_id = uuid.uuid4().hex[:12]
+    leader_name = "leader"
+    
+    # Create team
+    TeamManager.create_team(
+        name=team_name,
+        leader_name=leader_name,
+        leader_id=leader_id,
+        description=f"Team spawned from profile '{team_profile}'",
+        user=user_name,
+    )
+    
+    # Load leader profile and spawn
+    leader_profile = load_profile(leader_profile_name)
+    command, profile_env, _ = apply_profile(leader_profile, command=["claude"])
+    
+    # Build leader prompt
+    leader_prompt = f"""You are the leader of team '{team_name}' spawned from profile '{team_profile}'.
+    
+Your profile: {leader_profile_name}
+Personality: {leader_profile.personality or 'default'}
+
+Your responsibilities:
+1. Coordinate the team members
+2. Assign tasks and track progress
+3. Resolve blockers
+4. Report final status
+
+Team members: {', '.join(m['profile'] for m in member_configs)}
+
+Use clawteam commands to manage your team:
+- clawteam task create <team> "<task>" -o <member>
+- clawteam task update <team> <task-id> --status in_progress
+- clawteam inbox receive <team>
+- clawteam board show <team>
+"""
+    
+    be.spawn(
+        command=command,
+        agent_name=leader_name,
+        agent_id=leader_id,
+        agent_type="leader",
+        team_name=team_name,
+        prompt=leader_prompt,
+        env=profile_env or None,
+        cwd=None,
+    )
+    
+    console.print(f"[green]Leader spawned: {leader_name} (profile: {leader_profile_name})[/green]")
+    
+    # Spawn members
+    for member_config in member_configs:
+        member_profile_name = member_config["profile"]
+        member_personality = member_config.get("personality", "")
+        member_id = uuid.uuid4().hex[:12]
+        member_name = member_profile_name.replace("-", "-")
+        
+        # Load member profile
+        member_profile = load_profile(member_profile_name)
+        command, profile_env, _ = apply_profile(member_profile, command=["claude"])
+        
+        # Build member prompt
+        member_prompt = f"""You are a team member of '{team_name}'.
+        
+Your profile: {member_profile_name}
+Personality: {member_personality or 'default'}
+
+Team leader: {leader_name}
+Team profile: {team_profile}
+
+Your responsibilities:
+1. Complete assigned tasks
+2. Report progress to leader
+3. Identify and report blockers
+
+Use clawteam commands:
+- clawteam task list <team> --owner {member_name}
+- clawteam task update <team> <task-id> --status in_progress
+- clawteam inbox send <team> leader "STATUS: [description]"
+"""
+        
+        be.spawn(
+            command=command,
+            agent_name=member_name,
+            agent_id=member_id,
+            agent_type="general-purpose",
+            team_name=team_name,
+            prompt=member_prompt,
+            env=profile_env or None,
+            cwd=None,
+        )
+        
+        console.print(f"[green]Member spawned: {member_name} (profile: {member_profile_name})[/green]")
+    
+    _output(
+        {
+            "status": "spawned",
+            "team": team_name,
+            "profile": team_profile,
+            "leader": {"name": leader_name, "profile": leader_profile_name},
+            "members": [{"name": m["profile"].replace("-", "-"), "profile": m["profile"]} for m in member_configs],
+        },
+        lambda d: console.print(f"[green]Team '{team_name}' spawned successfully![/green]"),
+    )
 
 
 @team_app.command("discover")

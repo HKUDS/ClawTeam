@@ -43,6 +43,28 @@ def list_profiles() -> dict[str, AgentProfile]:
     return load_config().profiles
 
 
+def load_team_profile(team_name: str) -> tuple[str, list[dict]]:
+    """Load a team profile configuration.
+    
+    Returns (leader_profile_name, member_configs).
+    member_configs is a list of dicts with 'profile' and optional 'personality'.
+    """
+    from clawteam.config import load_config
+    
+    cfg = load_config()
+    team_profile = cfg.team_profiles.get(team_name)
+    if team_profile is None:
+        raise ValueError(f"Unknown team profile '{team_name}'")
+    
+    leader_profile = team_profile.leader.profile
+    members = [
+        {"profile": m.profile, "personality": m.personality}
+        for m in team_profile.members
+    ]
+    
+    return leader_profile, members
+
+
 def apply_profile(
     profile: AgentProfile | None,
     *,
