@@ -31,6 +31,8 @@ class SubprocessBackend(SpawnBackend):
         cwd: str | None = None,
         skip_permissions: bool = False,
     ) -> str:
+        from clawteam.team.models import get_data_dir
+
         spawn_env = os.environ.copy()
         clawteam_bin = resolve_clawteam_executable()
         spawn_env.update({
@@ -40,6 +42,9 @@ class SubprocessBackend(SpawnBackend):
             "CLAWTEAM_TEAM_NAME": team_name,
             "CLAWTEAM_AGENT_LEADER": "0",
         })
+        # Propagate resolved data dir so spawned agents find the right
+        # task/inbox storage even when the leader resolved it via config.
+        spawn_env.setdefault("CLAWTEAM_DATA_DIR", str(get_data_dir()))
         # Propagate user if set
         user = os.environ.get("CLAWTEAM_USER", "")
         if user:

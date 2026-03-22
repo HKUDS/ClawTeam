@@ -56,6 +56,8 @@ class TmuxBackend(SpawnBackend):
 
         session_name = f"clawteam-{team_name}"
         clawteam_bin = resolve_clawteam_executable()
+        from clawteam.team.models import get_data_dir
+
         env_vars = os.environ.copy()
         # Interactive CLIs like Codex refuse to start when TERM=dumb is inherited
         # from a non-interactive shell. tmux provides a real terminal, so we
@@ -69,6 +71,9 @@ class TmuxBackend(SpawnBackend):
             "CLAWTEAM_TEAM_NAME": team_name,
             "CLAWTEAM_AGENT_LEADER": "0",
         })
+        # Propagate resolved data dir so spawned agents find the right
+        # task/inbox storage even when the leader resolved it via config.
+        env_vars.setdefault("CLAWTEAM_DATA_DIR", str(get_data_dir()))
         if cwd:
             env_vars["CLAWTEAM_WORKSPACE_DIR"] = cwd
         # Inject context awareness flags
