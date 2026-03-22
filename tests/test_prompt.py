@@ -1,6 +1,12 @@
 """Tests for clawteam.spawn.prompt — build_agent_prompt."""
 
-from clawteam.spawn.prompt import build_agent_prompt
+import os
+
+from clawteam.spawn.prompt import (
+    _check_path_references,
+    _extract_path_references,
+    build_agent_prompt,
+)
 
 
 class TestBuildAgentPrompt:
@@ -90,3 +96,83 @@ class TestBuildAgentPrompt:
         assert "clawteam inbox send my-team boss" in prompt
         assert "clawteam cost report my-team" in prompt
         assert "commit your changes in this repository with git" in prompt
+
+
+class TestExtractPathReferences:
+    def test_extracts_absolute_paths(self):
+        refs = _extract_path_references("Fix the bug in /src/main.py and /lib/utils.js")
+        assert "/src/main.py" in refs
+        assert "/lib/utils.js" in refs
+
+    def test_extracts_relative_paths_with_extension(self):
+        refs = _extract_path_references("Look at src/config.json for settings")
+        assert "src/config.json" in refs
+
+    def test_ignores_urls(self):
+        refs = _extract_path_references("See https://example.com/path.html")
+        assert not any("example.com" in r for r in refs)
+
+    def test_extracts_dotslash_paths(self):
+        refs = _extract_path_references("Run ./scripts/build.sh")
+        assert "./scripts/build.sh" in refs
+
+    def test_empty_string(self):
+        assert _extract_path_references("") == []
+
+    def test_no_paths(self):
+        assert _extract_path_references("Just do the thing") == []
+
+
+class TestCheckPathReferences:
+    def test_returns_empty_without_workspace(self):
+        assert _check_path_references("Fix /nonexistent/file.py", "") == []
+
+    def test_warns_on_missing_absolute_path(self, tmp_path):
+        warnings = _check_path_references(
+            "Fix /definitely/nonexistent/file.py", str(tmp_path)
+        )
+        assert len(warnings) == 1
+        assert "/definitely/nonexistent/file.py" in warnings[0]
+
+    def test_no_warning_for_existing_relative_path(self, tmp_path):
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "main.py").write_text("print('hi')")
+        warnings = _check_path_references("Fix src/main.py", str(tmp_path))
+        assert len(warnings) == 0
+
+    def test_warns_on_missing_relative_path(self, tmp_path):
+        warnings = _check_path_references("Fix src/missing.py", str(tmp_path))
+        assert len(warnings) == 1
+        assert "src/missing.py" in warnings[0]
+
+
+class TestPromptPathWarnings:
+    def test_prompt_includes_path_warnings_for_missing_files(self, tmp_path):
+        prompt = build_agent_prompt(
+            agent_name="w", agent_id="id", agent_type="t",
+            team_name="team", leader_name="lead",
+            task="Fix the bug in src/nonexistent.py",
+            workspace_dir=str(tmp_path),
+        )
+        assert "Path Warnings" in prompt
+        assert "src/nonexistent.py" in prompt
+
+    def test_prompt_no_warnings_when_paths_exist(self, tmp_path):
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "main.py").write_text("x = 1")
+        prompt = build_agent_prompt(
+            agent_name="w", agent_id="id", agent_type="t",
+            team_name="team", leader_name="lead",
+            task="Fix the bug in src/main.py",
+            workspace_dir=str(tmp_path),
+        )
+        assert "Path Warnings" not in prompt
+
+    def test_prompt_no_warnings_without_workspace(self):
+        prompt = build_agent_prompt(
+            agent_name="w", agent_id="id", agent_type="t",
+            team_name="team", leader_name="lead",
+            task="Fix the bug in /nonexistent/file.py",
+        )
+        assert "Path Warnings" not in prompt
+

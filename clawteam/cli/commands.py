@@ -12,6 +12,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
+import click
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -1551,7 +1552,21 @@ def team_snapshot_delete(
 # Inbox Commands
 # ============================================================================
 
-inbox_app = typer.Typer(help="Inbox / messaging commands")
+
+class InboxTyperGroup(typer.core.TyperGroup):
+    """Inbox subcommands with a clearer error for the common missing-subcommand case."""
+
+    def resolve_command(self, ctx: click.Context, args: list[str]):
+        try:
+            return super().resolve_command(ctx, args)
+        except click.UsageError as exc:
+            if args and args[0] not in self.commands and not args[0].startswith("-"):
+                hint = "Use `clawteam inbox send <team> <recipient> <message>`."
+                raise click.UsageError(f"{exc.message} {hint}", ctx=ctx) from exc
+            raise
+
+
+inbox_app = typer.Typer(help="Inbox / messaging commands", cls=InboxTyperGroup)
 app.add_typer(inbox_app, name="inbox")
 
 
@@ -1569,9 +1584,24 @@ def inbox_send(
     from clawteam.team.mailbox import MailboxManager
     from clawteam.team.models import MessageType
 
+    if not content or not content.strip():
+        _output(
+            {"error": "Message content cannot be empty."},
+            lambda d: console.print(f"[red]{d['error']}[/red]"),
+        )
+        raise typer.Exit(1)
+
     sender = from_agent or AgentIdentity.from_env().agent_name
     mailbox = MailboxManager(team)
-    mt = MessageType(msg_type)
+    try:
+        mt = MessageType(msg_type)
+    except ValueError:
+        valid = ", ".join(t.value for t in MessageType)
+        _output(
+            {"error": f"Invalid message type '{msg_type}'. Valid types: {valid}"},
+            lambda d: console.print(f"[red]{d['error']}[/red]"),
+        )
+        raise typer.Exit(1)
     msg = mailbox.send(
         from_agent=sender,
         to=to,
@@ -1596,9 +1626,24 @@ def inbox_broadcast(
     from clawteam.team.mailbox import MailboxManager
     from clawteam.team.models import MessageType
 
+    if not content or not content.strip():
+        _output(
+            {"error": "Broadcast content cannot be empty."},
+            lambda d: console.print(f"[red]{d['error']}[/red]"),
+        )
+        raise typer.Exit(1)
+
     sender = from_agent or AgentIdentity.from_env().agent_name
     mailbox = MailboxManager(team)
-    mt = MessageType(msg_type)
+    try:
+        mt = MessageType(msg_type)
+    except ValueError:
+        valid = ", ".join(t.value for t in MessageType)
+        _output(
+            {"error": f"Invalid message type '{msg_type}'. Valid types: {valid}"},
+            lambda d: console.print(f"[red]{d['error']}[/red]"),
+        )
+        raise typer.Exit(1)
     messages = mailbox.broadcast(
         from_agent=sender,
         content=content,

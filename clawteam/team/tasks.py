@@ -36,6 +36,12 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _normalize_owner(owner: str | None) -> str | None:
+    if owner is None:
+        return None
+    return owner.strip()
+
+
 class TaskStore:
     """File-based task store with dependency tracking.
 
@@ -70,7 +76,7 @@ class TaskStore:
         task = TaskItem(
             subject=subject,
             description=description,
-            owner=owner,
+            owner=_normalize_owner(owner) or "",
             priority=priority or TaskPriority.medium,
             blocks=blocks or [],
             blocked_by=blocked_by or [],
@@ -138,7 +144,7 @@ class TaskStore:
             if status is not None:
                 task.status = status
             if owner is not None:
-                task.owner = owner
+                task.owner = _normalize_owner(owner) or ""
             if subject is not None:
                 task.subject = subject
             if description is not None:
@@ -222,6 +228,7 @@ class TaskStore:
         priority: TaskPriority | None = None,
         sort_by_priority: bool = False,
     ) -> list[TaskItem]:
+        owner = _normalize_owner(owner)
         root = _tasks_root(self.team_name)
         tasks = []
         for f in sorted(root.glob("task-*.json")):
@@ -230,7 +237,7 @@ class TaskStore:
                 task = TaskItem.model_validate(data)
                 if status and task.status != status:
                     continue
-                if owner and task.owner != owner:
+                if owner and task.owner.lower() != owner.lower():
                     continue
                 if priority and task.priority != priority:
                     continue
