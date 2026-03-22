@@ -75,13 +75,15 @@ clawteam board serve --port 8080   # Web dashboard
 
 ### Agent Spawning
 
+**IMPORTANT**: Always use the default command (`openclaw`) — do NOT override to `claude` or other agents. The default handles permissions, prompt injection, and nesting detection correctly. If you specify `claude` as the command, agents will get stuck on interactive permission prompts.
+
 ```bash
-# Default: spawns openclaw tui in tmux with prompt
+# Default (RECOMMENDED): spawns openclaw tui in tmux with prompt
 clawteam spawn -t <team> -n <name> --task "<task description>"
 
-# Explicit backend and command
-clawteam spawn tmux openclaw -t <team> -n <name> --task "<task>"
-clawteam spawn subprocess openclaw -t <team> -n <name> --task "<task>"
+# Explicit backend (still uses openclaw by default)
+clawteam spawn tmux -t <team> -n <name> --task "<task>"
+clawteam spawn subprocess -t <team> -n <name> --task "<task>"
 
 # With git worktree isolation
 clawteam spawn -t <team> -n <name> --task "<task>" --workspace --repo /path/to/repo

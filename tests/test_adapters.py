@@ -6,6 +6,7 @@ from clawteam.spawn.adapters import (
     NativeCliAdapter,
     command_basename,
     is_interactive_cli,
+    is_openclaw_command,
     is_opencode_command,
     is_qwen_command,
 )
@@ -27,8 +28,14 @@ class TestCLIDetection:
         assert not is_opencode_command(["openai"])
         assert not is_opencode_command([])
 
+    def test_is_openclaw_command(self):
+        assert is_openclaw_command(["openclaw"])
+        assert is_openclaw_command(["/usr/local/bin/openclaw"])
+        assert not is_openclaw_command(["claude"])
+        assert not is_openclaw_command([])
+
     def test_is_interactive_cli_covers_all_known(self):
-        for cmd in ["claude", "codex", "nanobot", "gemini", "kimi", "qwen", "opencode"]:
+        for cmd in ["claude", "codex", "nanobot", "gemini", "kimi", "qwen", "opencode", "openclaw"]:
             assert is_interactive_cli([cmd]), f"{cmd} should be interactive"
 
     def test_is_interactive_cli_rejects_unknown(self):
@@ -112,3 +119,37 @@ class TestPrepareCommandPrompt:
         )
         assert result.post_launch_prompt is None
         assert "hello" in result.final_command
+
+    def test_openclaw_interactive_gets_tui_and_message(self):
+        result = self.adapter.prepare_command(
+            ["openclaw"], prompt="do work", interactive=True,
+        )
+        assert "tui" in result.final_command
+        assert "--message" in result.final_command
+        assert "do work" in result.final_command
+        assert result.post_launch_prompt is None
+
+    def test_openclaw_noninteractive_gets_agent_and_session(self):
+        result = self.adapter.prepare_command(
+            ["openclaw"], prompt="do work", interactive=False,
+            agent_name="worker-1",
+        )
+        assert "agent" in result.final_command
+        assert "--local" in result.final_command
+        assert "--session-id" in result.final_command
+        assert "worker-1" in result.final_command
+        assert "--message" in result.final_command
+
+    def test_openclaw_no_prompt_still_adds_subcommand(self):
+        result = self.adapter.prepare_command(
+            ["openclaw"], interactive=True,
+        )
+        assert "tui" in result.final_command
+        assert "--message" not in result.final_command
+
+    def test_openclaw_preserves_existing_subcommand(self):
+        result = self.adapter.prepare_command(
+            ["openclaw", "agent"], prompt="do work", interactive=False,
+        )
+        assert result.final_command.count("agent") == 1
+        assert "--message" in result.final_command

@@ -6,7 +6,7 @@ import os
 import shlex
 import subprocess
 
-from clawteam.spawn.adapters import NativeCliAdapter
+from clawteam.spawn.adapters import NativeCliAdapter, is_openclaw_command
 from clawteam.spawn.base import SpawnBackend
 from clawteam.spawn.cli_env import build_spawn_path, resolve_clawteam_executable
 from clawteam.spawn.command_validation import validate_spawn_command
@@ -67,6 +67,11 @@ class SubprocessBackend(SpawnBackend):
         normalized_command = prepared.normalized_command
         validation_command = normalized_command
         final_command = list(prepared.final_command)
+
+        # Isolate OpenClaw agents in per-agent sessions
+        if is_openclaw_command(normalized_command):
+            session_key = f"clawteam-{team_name}-{agent_name}"
+            final_command.extend(["--session-id", session_key])
 
         command_error = validate_spawn_command(validation_command, path=spawn_env["PATH"], cwd=cwd)
         if command_error:
