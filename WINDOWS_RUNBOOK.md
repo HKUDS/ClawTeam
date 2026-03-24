@@ -137,6 +137,9 @@ Included in `scripts/`:
 - `session-save-win.ps1` — save session metadata quickly
 - `session-show-win.ps1` — show session metadata for a team
 - `soak-test-win.ps1` — repeated task/inbox/session/cost loop for Windows soak testing
+- `launch-demo-win.ps1` — one-click demo team + board startup
+- `full-cycle-win.ps1` — one-click team/task/session/board startup flow
+- `prod-soak-win.ps1` — longer production-style worker/workspace/session soak loop
 
 Examples:
 
@@ -148,6 +151,9 @@ Examples:
 ./scripts/session-save-win.ps1 -Team demo-win -Agent leader -SessionId sess-001
 ./scripts/session-show-win.ps1 -Team demo-win
 ./scripts/soak-test-win.ps1 -Team soak-win -Iterations 10
+./scripts/launch-demo-win.ps1 -Team demo-win
+./scripts/full-cycle-win.ps1 -Team prod-win -Port 8080
+./scripts/prod-soak-win.ps1 -Team prod-soak-win -Cycles 5
 ```
 
 ## Publishing Note
