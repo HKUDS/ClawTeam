@@ -9,6 +9,7 @@ from pathlib import Path
 
 from clawteam.workspace import git
 from clawteam.workspace.models import WorkspaceInfo, WorkspaceRegistry
+from clawteam.fsutil import replace_file
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ def _save_registry(registry: WorkspaceRegistry) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
     tmp.write_text(registry.model_dump_json(indent=2), encoding="utf-8")
-    tmp.rename(path)
+    replace_file(tmp, path)
 
 
 class WorkspaceManager:

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import fcntl
 import json
 import time
 import uuid
 from pathlib import Path
 
+from clawteam.compat import is_path_locked
 from clawteam.team.models import get_data_dir
 from clawteam.transport.base import Transport
 from clawteam.transport.claimed import ClaimedMessage
@@ -35,27 +35,6 @@ def _claimable_paths(inbox: Path) -> list[Path]:
     return sorted(paths)
 
 
-def _is_locked(path: Path) -> bool:
-    """Best-effort Unix lock probe for claimed mailbox files.
-
-    This uses ``fcntl.flock()``, so it only reflects the advisory lock state on
-    Unix-like systems. The probe must release the lock before returning, which
-    means callers must treat the result as advisory rather than a hard
-    cross-process guarantee.
-    """
-    try:
-        handle = path.open("rb")
-    except Exception:
-        return True
-    try:
-        try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
-            return True
-        return False
-    finally:
-        handle.close()
-
 
 class FileTransport(Transport):
     """Transport backed by the local filesystem.
@@ -77,19 +56,21 @@ class FileTransport(Transport):
     ) -> ClaimedMessage:
         def _ack() -> None:
             try:
-                consumed_path.unlink(missing_ok=True)
-            finally:
                 file_handle.close()
+            finally:
+                consumed_path.unlink(missing_ok=True)
 
         def _quarantine(error: str) -> None:
-            self._quarantine_bytes(
-                agent_name,
-                data,
-                error,
-                source_name=original_path.name,
-                consumed_path=consumed_path,
-            )
-            file_handle.close()
+            try:
+                file_handle.close()
+            finally:
+                self._quarantine_bytes(
+                    agent_name,
+                    data,
+                    error,
+                    source_name=original_path.name,
+                    consumed_path=consumed_path,
+                )
 
         return ClaimedMessage(data=data, ack=_ack, quarantine=_quarantine)
 
@@ -124,9 +105,7 @@ class FileTransport(Transport):
                 consumed.unlink(missing_ok=True)
                 continue
 
-            try:
-                fcntl.flock(file_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except OSError:
+            if is_path_locked(consumed):
                 file_handle.close()
                 continue
             try:
@@ -191,7 +170,7 @@ class FileTransport(Transport):
         files = _claimable_paths(inbox)
         messages: list[bytes] = []
         for f in files[:limit]:
-            if f.suffix == ".consumed" and _is_locked(f):
+            if f.suffix == ".consumed" and is_path_locked(f):
                 continue
             try:
                 messages.append(f.read_bytes())
@@ -204,7 +183,7 @@ class FileTransport(Transport):
         return sum(
             1
             for path in _claimable_paths(inbox)
-            if path.suffix != ".consumed" or not _is_locked(path)
+            if path.suffix != ".consumed" or not is_path_locked(path)
         )
 
     def list_recipients(self) -> list[str]:

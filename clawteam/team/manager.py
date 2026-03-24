@@ -8,6 +8,7 @@ from pathlib import Path
 
 from clawteam.team.models import TeamConfig, TeamMember, get_data_dir
 from clawteam.team.plan import referenced_legacy_plan_paths, team_plans_path
+from clawteam.fsutil import replace_file
 
 
 def _teams_root() -> Path:
@@ -42,7 +43,7 @@ def _save_config(config: TeamConfig) -> None:
     tmp.write_text(
         config.model_dump_json(indent=2, by_alias=True), encoding="utf-8"
     )
-    tmp.rename(path)
+    replace_file(tmp, path)
 
 
 class TeamManager:

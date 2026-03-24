@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import fcntl
 import json
 import re
 import shutil
@@ -12,7 +11,9 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from clawteam.compat import is_path_locked
 from clawteam.team.models import get_data_dir
+from clawteam.fsutil import replace_file
 
 
 def _now_iso() -> str:
@@ -68,13 +69,7 @@ def _read_inbox_messages(directory: Path) -> list[dict]:
         except Exception:
             continue
         try:
-            try:
-                # Snapshot capture only needs a best-effort view of recovered
-                # `.consumed` files. This Unix-only `flock()` probe avoids
-                # active claims, but the result is advisory because the lock is
-                # released before the caller resumes.
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except OSError:
+            if is_path_locked(f):
                 continue
             try:
                 items.append(json.loads(handle.read().decode("utf-8")))
@@ -157,7 +152,7 @@ class SnapshotManager:
         tmp.write_text(
             json.dumps(bundle, indent=2, ensure_ascii=False), encoding="utf-8"
         )
-        tmp.rename(path)
+        replace_file(tmp, path)
         return meta
 
     def list_snapshots(self) -> list[SnapshotMeta]:
@@ -270,4 +265,4 @@ class SnapshotManager:
 def _atomic_write(path: Path, data: dict) -> None:
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-    tmp.rename(path)
+    replace_file(tmp, path)

@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import json
 import os
+from clawteam.fsutil import replace_file
 from pathlib import Path
 
 from pydantic import BaseModel, Field
+
+from clawteam.fsutil import replace_file
 
 
 class AgentProfile(BaseModel):
@@ -41,7 +44,7 @@ class ClawTeamConfig(BaseModel):
     default_team: str = ""
     transport: str = ""
     workspace: str = "auto"  # "auto" | "always" | "never" | ""
-    default_backend: str = "tmux"  # "tmux" | "subprocess"
+    default_backend: str = "subprocess" if os.name == "nt" else "tmux"  # "tmux" | "subprocess"
     skip_permissions: bool = True  # pass --dangerously-skip-permissions to claude
     timezone: str = "UTC"  # display timezone for human-readable timestamps
     gource_path: str = ""  # custom path to gource binary (auto-detected if empty)
@@ -76,7 +79,7 @@ def save_config(cfg: ClawTeamConfig) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_suffix(".tmp")
     tmp.write_text(cfg.model_dump_json(indent=2), encoding="utf-8")
-    tmp.rename(p)
+    replace_file(tmp, p)
 
 
 def get_effective(key: str) -> tuple[str, str]:
