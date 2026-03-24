@@ -5,10 +5,12 @@ import json
 from pathlib import Path
 
 from clawteam.board.collector import BoardCollector
+from clawteam.board.renderer import BoardRenderer
 from clawteam.board.server import BoardHandler
 from clawteam.team.mailbox import MailboxManager
 from clawteam.team.manager import TeamManager
 from clawteam.team.tasks import TaskStore
+from rich.console import Console
 
 
 def test_collect_overview_does_not_call_collect_team(monkeypatch, tmp_path: Path):
@@ -123,6 +125,32 @@ def test_collect_team_preserves_conflicts_field(monkeypatch, tmp_path: Path):
     data = BoardCollector().collect_team("demo")
 
     assert "conflicts" in data
+
+
+def test_renderer_shows_review_column_and_tasks():
+    console = Console(record=True, width=200)
+    renderer = BoardRenderer(console=console)
+
+    data = {
+        "team": {"name": "demo", "createdAt": "2026-03-24T00:00:00+00:00", "description": "", "leaderName": "lead"},
+        "members": [{"name": "lead", "agentType": "lead", "joinedAt": "2026-03-24T00:00:00+00:00", "inboxCount": 0}],
+        "tasks": {
+            "pending": [],
+            "in_progress": [],
+            "review": [{"id": "task-review-1", "subject": "Review API changes", "owner": "qa"}],
+            "completed": [],
+            "blocked": [],
+        },
+        "taskSummary": {"total": 1, "pending": 0, "in_progress": 0, "review": 1, "completed": 0, "blocked": 0},
+        "conflicts": {"totalOverlaps": 0},
+        "cost": {},
+    }
+
+    renderer.render_team_board(data)
+    output = console.export_text()
+
+    assert "REVIEW (1)" in output
+    assert "Review API changes" in output
 
 
 def test_collect_team_exposes_member_inbox_identity(monkeypatch, tmp_path: Path):

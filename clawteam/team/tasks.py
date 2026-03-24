@@ -121,8 +121,10 @@ class TaskStore:
                 if not task.started_at:
                     task.started_at = _now_iso()
 
-            # Clear lock when transitioning to completed or pending
-            if status in (TaskStatus.completed, TaskStatus.pending):
+            # Clear lock when transitioning out of active execution. Review is
+            # a handoff state, so it should not remain locked to the worker
+            # that finished the implementation.
+            if status in (TaskStatus.completed, TaskStatus.pending, TaskStatus.review):
                 task.locked_by = ""
                 task.locked_at = ""
 

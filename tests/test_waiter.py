@@ -57,6 +57,27 @@ def test_waiter_timeout(mock_mailbox, mock_task_store):
     assert result.completed == 0
     assert result.in_progress == 1
 
+def test_waiter_counts_review_tasks(mock_mailbox, mock_task_store):
+    task = MagicMock(id="1", subject="task1", status=TaskStatus.review, owner="alice")
+    mock_task_store.list_tasks.return_value = [task]
+    mock_mailbox.receive.return_value = []
+
+    waiter = TaskWaiter(
+        team_name="test-team",
+        agent_name="leader",
+        mailbox=mock_mailbox,
+        task_store=mock_task_store,
+        poll_interval=0.01,
+        timeout=0.05
+    )
+
+    result = waiter.wait()
+
+    assert result.status == "timeout"
+    assert result.completed == 0
+    assert result.review == 1
+    assert result.in_progress == 0
+
 def test_waiter_on_message_callback(mock_mailbox, mock_task_store):
     task = MagicMock(id="1", subject="task1", status=TaskStatus.completed, owner="alice")
     mock_task_store.list_tasks.return_value = [task]

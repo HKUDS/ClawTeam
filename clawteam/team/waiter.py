@@ -21,6 +21,7 @@ class WaitResult:
     total: int = 0
     completed: int = 0
     in_progress: int = 0
+    review: int = 0
     pending: int = 0
     blocked: int = 0
     messages_received: int = 0
@@ -47,7 +48,7 @@ class TaskWaiter:
         poll_interval: float = 5.0,
         timeout: float | None = None,
         on_message: Callable[[TeamMessage], None] | None = None,
-        on_progress: Callable[[int, int, int, int, int], None] | None = None,
+        on_progress: Callable[[int, int, int, int, int, int], None] | None = None,
         on_agent_dead: Callable[[str, list[TaskItem]], None] | None = None,
     ):
         self.team_name = team_name
@@ -96,14 +97,15 @@ class TaskWaiter:
                 total = len(tasks)
                 completed = sum(1 for t in tasks if t.status == TaskStatus.completed)
                 in_progress = sum(1 for t in tasks if t.status == TaskStatus.in_progress)
+                review = sum(1 for t in tasks if t.status == TaskStatus.review)
                 pending = sum(1 for t in tasks if t.status == TaskStatus.pending)
                 blocked = sum(1 for t in tasks if t.status == TaskStatus.blocked)
 
                 # Deduplicate progress output
-                summary = f"{completed}/{total}/{in_progress}/{pending}/{blocked}"
+                summary = f"{completed}/{total}/{in_progress}/{review}/{pending}/{blocked}"
                 if summary != last_summary:
                     if self.on_progress:
-                        self.on_progress(completed, total, in_progress, pending, blocked)
+                        self.on_progress(completed, total, in_progress, review, pending, blocked)
                     last_summary = summary
 
                 # 4. All done?
@@ -120,6 +122,7 @@ class TaskWaiter:
                         total=total,
                         completed=completed,
                         in_progress=0,
+                        review=0,
                         pending=0,
                         blocked=0,
                         messages_received=self._messages_received,
@@ -135,6 +138,7 @@ class TaskWaiter:
                         total=total,
                         completed=completed,
                         in_progress=in_progress,
+                        review=review,
                         pending=pending,
                         blocked=blocked,
                         messages_received=self._messages_received,
@@ -154,6 +158,7 @@ class TaskWaiter:
                 total=total,
                 completed=sum(1 for t in tasks if t.status == TaskStatus.completed),
                 in_progress=sum(1 for t in tasks if t.status == TaskStatus.in_progress),
+                review=sum(1 for t in tasks if t.status == TaskStatus.review),
                 pending=sum(1 for t in tasks if t.status == TaskStatus.pending),
                 blocked=sum(1 for t in tasks if t.status == TaskStatus.blocked),
                 messages_received=self._messages_received,

@@ -108,6 +108,14 @@ class TestTaskUpdate:
         assert completed.locked_by == ""
         assert completed.locked_at == ""
 
+    def test_review_clears_lock(self, store):
+        t = store.create("ready for review")
+        with patch("clawteam.team.tasks.TaskStore._acquire_lock"):
+            store.update(t.id, status=TaskStatus.in_progress, caller="agent-1")
+        reviewed = store.update(t.id, status=TaskStatus.review)
+        assert reviewed.locked_by == ""
+        assert reviewed.locked_at == ""
+
     def test_updated_at_changes(self, store):
         t = store.create("ts-check")
         original_ts = t.updated_at

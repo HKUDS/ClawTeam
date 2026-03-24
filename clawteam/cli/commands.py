@@ -2153,7 +2153,7 @@ def task_wait(
 
     last_progress = ""
 
-    def _on_progress(completed, total, in_progress, pending, blocked):
+    def _on_progress(completed, total, in_progress, review, pending, blocked):
         nonlocal last_progress
         summary = f"{completed}/{total}"
         if summary == last_progress:
@@ -2165,13 +2165,14 @@ def task_wait(
                 "completed": completed,
                 "total": total,
                 "in_progress": in_progress,
+                "review": review,
                 "pending": pending,
                 "blocked": blocked,
             }), flush=True)
         else:
             console.print(
                 f"  {completed}/{total} tasks completed"
-                f"  ({in_progress} in progress, {pending} pending, {blocked} blocked)"
+                f"  ({in_progress} in progress, {review} review, {pending} pending, {blocked} blocked)"
             )
 
     if not _json_output:
@@ -2217,6 +2218,7 @@ def task_wait(
             "total": result.total,
             "completed": result.completed,
             "in_progress": result.in_progress,
+            "review": result.review,
             "pending": result.pending,
             "blocked": result.blocked,
             "messages_received": result.messages_received,
