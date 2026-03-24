@@ -90,6 +90,22 @@ def test_task_cli_supports_priority_create_update_and_list(tmp_path):
     assert "Priority: low" in get_result.output
 
 
+def test_inbox_cli_missing_subcommand_shows_send_hint(tmp_path):
+    runner = CliRunner()
+    env = {
+        "HOME": str(tmp_path),
+        "CLAWTEAM_DATA_DIR": str(tmp_path / ".clawteam"),
+    }
+
+    result = runner.invoke(app, ["inbox", "demo", "lead", "hello"], env=env)
+
+    assert result.exit_code == 2
+    assert "No such command 'demo'" in result.output
+    assert "Use `clawteam inbox send <team> <recipient>" in result.output
+    assert "<message>`." in result.output
+
+
+
 def test_team_status_uses_configured_timezone(tmp_path):
     runner = CliRunner()
     env = {
@@ -108,3 +124,60 @@ def test_team_status_uses_configured_timezone(tmp_path):
 
     assert result.exit_code == 0
     assert "CST" in result.output
+
+
+def test_inbox_send_rejects_empty_content(tmp_path):
+    runner = CliRunner()
+    env = {
+        "HOME": str(tmp_path),
+        "CLAWTEAM_DATA_DIR": str(tmp_path / ".clawteam"),
+        "CLAWTEAM_AGENT_NAME": "sender",
+        "CLAWTEAM_AGENT_ID": "s001",
+    }
+    result = runner.invoke(app, ["inbox", "send", "demo", "bob", ""], env=env)
+    assert result.exit_code == 1
+    assert "cannot be empty" in result.output
+
+
+def test_inbox_send_rejects_invalid_message_type(tmp_path):
+    runner = CliRunner()
+    env = {
+        "HOME": str(tmp_path),
+        "CLAWTEAM_DATA_DIR": str(tmp_path / ".clawteam"),
+        "CLAWTEAM_AGENT_NAME": "sender",
+        "CLAWTEAM_AGENT_ID": "s001",
+    }
+    result = runner.invoke(
+        app, ["inbox", "send", "demo", "bob", "hello", "--type", "bogus"], env=env
+    )
+    assert result.exit_code == 1
+    assert "Invalid message type" in result.output
+    assert "bogus" in result.output
+
+
+def test_inbox_broadcast_rejects_empty_content(tmp_path):
+    runner = CliRunner()
+    env = {
+        "HOME": str(tmp_path),
+        "CLAWTEAM_DATA_DIR": str(tmp_path / ".clawteam"),
+        "CLAWTEAM_AGENT_NAME": "sender",
+        "CLAWTEAM_AGENT_ID": "s001",
+    }
+    result = runner.invoke(app, ["inbox", "broadcast", "demo", "   "], env=env)
+    assert result.exit_code == 1
+    assert "cannot be empty" in result.output
+
+
+def test_inbox_broadcast_rejects_invalid_message_type(tmp_path):
+    runner = CliRunner()
+    env = {
+        "HOME": str(tmp_path),
+        "CLAWTEAM_DATA_DIR": str(tmp_path / ".clawteam"),
+        "CLAWTEAM_AGENT_NAME": "sender",
+        "CLAWTEAM_AGENT_ID": "s001",
+    }
+    result = runner.invoke(
+        app, ["inbox", "broadcast", "demo", "hello world", "--type", "nope"], env=env
+    )
+    assert result.exit_code == 1
+    assert "Invalid message type" in result.output

@@ -57,18 +57,19 @@ class NativeCliAdapter:
             if prompt:
                 final_command.extend(["-m", prompt])
         elif is_openclaw_command(normalized_command):
-            if "agent" in normalized_command:
+            # OpenClaw uses subcommands: 'tui' (interactive) or 'agent' (non-interactive)
+            if "tui" not in final_command and "agent" not in final_command:
+                final_command.insert(1, "tui" if interactive else "agent")
+            if "agent" in final_command:
                 if "--local" not in normalized_command:
                     final_command.append("--local")
                 if agent_name and "--session-id" not in normalized_command:
                     final_command.extend(["--session-id", agent_name])
-                if prompt:
-                    final_command.extend(["--message", prompt])
             else:
                 if agent_name and "--session" not in normalized_command:
                     final_command.extend(["--session", agent_name])
-                if prompt:
-                    final_command.extend(["--message", prompt])
+            if prompt:
+                final_command.extend(["--message", prompt])
         elif prompt:
             if interactive and is_claude_command(normalized_command):
                 post_launch_prompt = prompt

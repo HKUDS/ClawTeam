@@ -6,6 +6,56 @@ by the ClawTeam Skill, not duplicated here.
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
+
+def _extract_path_references(text: str) -> list[str]:
+    """Extract file path references from task text.
+
+    Looks for absolute paths (starting with /) and common relative paths
+    that look like file references (containing a dot extension or ending with /).
+    """
+    # Match paths like /foo/bar.py, src/main.rs, ./config.json, etc.
+    # Excludes URLs (http://, https://) and common non-path patterns
+    pattern = r'(?<!\w)(?:\.?/[\w./-]+|[\w][\w/-]*\.[\w]+)'
+    candidates = re.findall(pattern, text)
+    # Filter out things that look like URLs, URL path components, or version numbers
+    # Also remove anything preceded by :// in the original text
+    url_pattern = re.compile(r'https?://\S+')
+    url_spans = [(m.start(), m.end()) for m in url_pattern.finditer(text)]
+    result = []
+    for p in candidates:
+        if p.startswith("http") or ".." in p:
+            continue
+        # Check if this match falls within a URL span
+        idx = text.find(p)
+        in_url = any(start <= idx < end for start, end in url_spans)
+        if in_url:
+            continue
+        result.append(p)
+    return result
+
+
+def _check_path_references(task: str, workspace_dir: str) -> list[str]:
+    """Check task text for file path references that don't exist.
+
+    Returns list of warning strings for missing paths.
+    """
+    if not workspace_dir:
+        return []
+    refs = _extract_path_references(task)
+    warnings = []
+    ws = Path(workspace_dir)
+    for ref in refs:
+        if ref.startswith("/"):
+            full = Path(ref)
+        else:
+            full = ws / ref
+        if not full.exists():
+            warnings.append(f"Referenced path not found: {ref}")
+    return warnings
+
 
 def _build_context_block(team_name: str, agent_name: str, repo: str | None = None) -> str:
     """Build a context awareness block from the workspace context layer.
@@ -36,6 +86,7 @@ def build_agent_prompt(
     workspace_branch: str = "",
     isolated_workspace: bool = False,
     repo_path: str | None = None,
+    data_dir: str = "",
 ) -> str:
     """Build agent prompt: identity + task + context + coordination."""
     lines = [
@@ -69,6 +120,18 @@ def build_agent_prompt(
         "## Task\n",
         task,
     ])
+
+    # Check for referenced paths that don't exist
+    path_warnings = _check_path_references(task, workspace_dir)
+    if path_warnings:
+        lines.extend([
+            "",
+            "## Path Warnings\n",
+            "The following paths referenced in the task were not found:",
+        ])
+        for w in path_warnings:
+            lines.append(f"- {w}")
+        lines.append("- Verify these paths before starting work.")
 
     # Inject cross-agent context awareness
     context_block = _build_context_block(team_name, agent_name, repo_path)

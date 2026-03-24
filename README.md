@@ -1,3 +1,5 @@
+> **Fork notice:** This `openclaw-integration` branch is an OpenClaw-adapted fork of `HKUDS/ClawTeam`. It carries a small downstream delta for OpenClaw skill support, install/bootstrap flow, and session-isolation/adapter support. See [FORK.md](FORK.md), `workflow/UPSTREAM_SYNC.md`, and `workflow/reports/win4r-delta-filelist-2026-03-22.md` for details.
+
 <h1 align="center"><img src="assets/icon.png" alt="" width="64" style="vertical-align: middle;">&nbsp; ClawTeam: Agent Swarm Intelligence</h1>
 
 <p align="center">

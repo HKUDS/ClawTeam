@@ -6,7 +6,7 @@ import os
 import shlex
 import subprocess
 
-from clawteam.spawn.adapters import NativeCliAdapter
+from clawteam.spawn.adapters import NativeCliAdapter, is_openclaw_command
 from clawteam.spawn.base import SpawnBackend
 from clawteam.spawn.cli_env import build_spawn_path, resolve_clawteam_executable
 from clawteam.spawn.command_validation import validate_spawn_command
@@ -31,6 +31,8 @@ class SubprocessBackend(SpawnBackend):
         cwd: str | None = None,
         skip_permissions: bool = False,
     ) -> str:
+        from clawteam.team.models import get_data_dir
+
         spawn_env = os.environ.copy()
         clawteam_bin = resolve_clawteam_executable()
         spawn_env.update({
@@ -40,6 +42,9 @@ class SubprocessBackend(SpawnBackend):
             "CLAWTEAM_TEAM_NAME": team_name,
             "CLAWTEAM_AGENT_LEADER": "0",
         })
+        # Propagate resolved data dir so spawned agents find the right
+        # task/inbox storage even when the leader resolved it via config.
+        spawn_env.setdefault("CLAWTEAM_DATA_DIR", str(get_data_dir()))
         # Propagate user if set
         user = os.environ.get("CLAWTEAM_USER", "")
         if user:
@@ -67,6 +72,11 @@ class SubprocessBackend(SpawnBackend):
         normalized_command = prepared.normalized_command
         validation_command = normalized_command
         final_command = list(prepared.final_command)
+
+        # Isolate OpenClaw agents in per-agent sessions
+        if is_openclaw_command(normalized_command):
+            session_key = f"clawteam-{team_name}-{agent_name}"
+            final_command.extend(["--session-id", session_key])
 
         command_error = validate_spawn_command(validation_command, path=spawn_env["PATH"], cwd=cwd)
         if command_error:

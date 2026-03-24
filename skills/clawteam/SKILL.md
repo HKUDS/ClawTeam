@@ -220,6 +220,49 @@ clawteam --json board show my-team
 clawteam --json task list my-team --status pending
 ```
 
+## Dispatch Rules: Model Assignment & Worker Count
+
+When acting as team leader, apply these rules before spawning workers.
+
+### Model Assignment
+
+Choose the model based on task complexity:
+
+| Difficulty | Model | Use When |
+|-----------|-------|----------|
+| Light | haiku | Log reading, file listing, simple lookups, status checks |
+| Medium | sonnet | Code analysis, report writing, standard dev tasks, most coding |
+| Heavy | opus | Architecture design, complex refactoring, deep reasoning, novel problem-solving |
+
+Default to **sonnet** when uncertain. Only escalate to opus when the task genuinely requires deep reasoning or cross-cutting architectural decisions. Use haiku aggressively for simple read/scan work — it's 20x cheaper and 10x faster.
+
+Pass the model via `--profile` when spawning:
+
+```bash
+clawteam spawn --profile claude-haiku --team my-team --agent-name scanner --task "List all TODO comments"
+clawteam spawn --profile claude-sonnet --team my-team --agent-name dev1 --task "Implement auth module"
+clawteam spawn --profile claude-opus --team my-team --agent-name architect --task "Design migration strategy"
+```
+
+### Worker Count
+
+Decide how many workers to spawn based on **task independence**, not size:
+
+| Workers | When |
+|---------|------|
+| 1 | Steps have sequential dependencies (B needs A's output) |
+| 2–3 | Task splits into independent sub-tasks that don't share state (e.g., research A vs B vs C; fix modules X, Y, Z) |
+| 4–5 | Broad scan across multiple repos/areas (e.g., audit 5 repos) |
+| Never >5 | Diminishing returns + OCP load risk |
+
+**Key question:** "Can worker B start WITHOUT worker A's output?" If no → same worker. If yes → separate workers.
+
+**Examples:**
+- "Investigate MC + OCP + competitors" → 3 workers (one per target), all sonnet
+- "Read proxy log and summarize errors" → 1 worker, haiku
+- "Refactor auth module with new tests" → 1 worker (tests depend on refactored code), sonnet
+- "Redesign the plugin architecture" → 1 worker, opus
+
 ## Important Notes
 
 - `inbox receive` consumes messages. Use `inbox peek` for non-destructive reads.

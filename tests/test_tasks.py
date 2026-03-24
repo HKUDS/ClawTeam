@@ -24,6 +24,10 @@ class TestTaskCreate:
         t = store.create("Fix bug", owner="alice")
         assert t.owner == "alice"
 
+    def test_create_strips_owner_whitespace(self, store):
+        t = store.create("Fix bug", owner="  alice  ")
+        assert t.owner == "alice"
+
     def test_create_with_priority(self, store):
         t = store.create("urgent item", priority=TaskPriority.urgent)
         assert t.priority == TaskPriority.urgent
@@ -73,6 +77,11 @@ class TestTaskUpdate:
     def test_update_owner(self, store):
         t = store.create("task")
         updated = store.update(t.id, owner="bob")
+        assert updated.owner == "bob"
+
+    def test_update_owner_strips_whitespace(self, store):
+        t = store.create("task")
+        updated = store.update(t.id, owner="  bob  ")
         assert updated.owner == "bob"
 
     def test_update_priority(self, store):
@@ -136,6 +145,25 @@ class TestTaskList:
         tasks = store.list_tasks(owner="alice")
         assert len(tasks) == 1
         assert tasks[0].owner == "alice"
+
+    def test_list_filter_by_owner_strips_filter_whitespace(self, store):
+        store.create("alice-task", owner="alice")
+        store.create("bob-task", owner="bob")
+        tasks = store.list_tasks(owner="  alice  ")
+        assert len(tasks) == 1
+        assert tasks[0].owner == "alice"
+
+    def test_list_filter_by_owner_case_insensitive(self, store):
+        store.create("alice-task", owner="Alice")
+        store.create("bob-task", owner="bob")
+        tasks = store.list_tasks(owner="alice")
+        assert len(tasks) == 1
+        assert tasks[0].owner == "Alice"
+
+    def test_list_filter_by_owner_case_insensitive_reverse(self, store):
+        store.create("alice-task", owner="alice")
+        tasks = store.list_tasks(owner="ALICE")
+        assert len(tasks) == 1
 
     def test_list_empty(self, store):
         assert store.list_tasks() == []
