@@ -126,14 +126,29 @@ These were manually validated on this machine:
 - Prefer subprocess/windows backend
 - Use git worktree flows for isolated worker changes
 
-## Suggested Next Step
+## Convenience Scripts
 
-If you want this preserved cleanly, commit the patch branch:
+Included in `scripts/`:
+
+- `clawteam-win.ps1` — wrapper for `python -m clawteam`
+- `smoke-test-win.ps1` — quick Windows smoke test
+- `spawn-worker-win.ps1` — helper to spawn a Windows worker
+
+Examples:
 
 ```powershell
-git checkout windows-compat
-git add .
-git commit -m "Add Windows compatibility path for ClawTeam"
+./scripts/clawteam-win.ps1 config show
+./scripts/smoke-test-win.ps1
+./scripts/spawn-worker-win.ps1 -Team demo-win -AgentName worker1 -Task "Do the task"
 ```
 
-If you also want it published, fork the repo and push the branch.
+## Git / PR Status
+
+This work has been prepared and published as:
+
+- Branch: `windows-compat`
+- PR: `https://github.com/HKUDS/ClawTeam/pull/82`
+
+## Suggested Next Step
+
+Run the smoke test, then start using the wrapper scripts for normal operation.
