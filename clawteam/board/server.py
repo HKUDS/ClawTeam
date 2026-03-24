@@ -46,6 +46,23 @@ class BoardHandler(BaseHTTPRequestHandler):
     interval: float = 2.0
     team_cache: TeamSnapshotCache
 
+    # Performance monitoring stats
+    _total_requests: int = 0
+    _active_connections: int = 0
+    _stats_lock: threading.Lock = threading.Lock()
+
+    def handle(self):
+        """Handle a single HTTP request with performance tracking."""
+        self._start_time = time.monotonic()
+        with self._stats_lock:
+            BoardHandler._active_connections += 1
+            BoardHandler._total_requests += 1
+        try:
+            super().handle()
+        finally:
+            with self._stats_lock:
+                BoardHandler._active_connections -= 1
+
     def do_GET(self):
         path = self.path.split("?")[0]
 
@@ -53,6 +70,8 @@ class BoardHandler(BaseHTTPRequestHandler):
             self._serve_static("index.html", "text/html")
         elif path == "/api/overview":
             self._serve_json(self.collector.collect_overview())
+        elif path == "/api/stats":
+            self._serve_stats()
         elif path.startswith("/api/team/"):
             team_name = path[len("/api/team/"):].strip("/")
             if not team_name:
@@ -253,6 +272,16 @@ class BoardHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _serve_stats(self):
+        """Serve internal performance stats as JSON."""
+        with self._stats_lock:
+            stats = {
+                "active_connections": self._active_connections,
+                "total_requests": self._total_requests,
+                "uptime_seconds": time.monotonic() - getattr(self.server, "_started_at", time.monotonic()),
+            }
+        self._serve_json(stats)
+
     def _serve_static(self, filename: str, content_type: str):
         filepath = _STATIC_DIR / filename
         if not filepath.exists():
@@ -315,6 +344,11 @@ class BoardHandler(BaseHTTPRequestHandler):
         if "/api/events/" not in first:
             super().log_message(format, *args)
 
+    def log_request(self, code="-", size="-"):
+        """Override to include duration in logs."""
+        duration = time.monotonic() - getattr(self, "_start_time", time.monotonic())
+        self.log_message('"%s" %s %s [%.4fs]', self.requestline, str(code), str(size), duration)
+
 
 def serve(
     host: str = "127.0.0.1",
@@ -330,6 +364,7 @@ def serve(
     BoardHandler.team_cache = TeamSnapshotCache(ttl_seconds=interval)
 
     server = ThreadingHTTPServer((host, port), BoardHandler)
+    server._started_at = time.monotonic()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
