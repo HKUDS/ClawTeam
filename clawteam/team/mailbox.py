@@ -9,6 +9,7 @@ import uuid
 from clawteam.team.models import MessageType, TeamMessage, get_data_dir
 from clawteam.transport.base import Transport
 from clawteam.transport.claimed import ClaimedMessage
+from clawteam.fsutil import replace_file
 
 
 def _default_transport(team_name: str) -> Transport:
@@ -53,7 +54,7 @@ class MailboxManager:
             msg.model_dump_json(indent=2, by_alias=True, exclude_none=True),
             encoding="utf-8",
         )
-        tmp.rename(path)
+        replace_file(tmp, path)
 
     def get_event_log(self, limit: int = 100) -> list[TeamMessage]:
         """Read event log (newest first). Non-destructive."""

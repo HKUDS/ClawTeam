@@ -10,6 +10,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from clawteam.team.models import get_data_dir
+from clawteam.fsutil import replace_file
 
 
 def _now_iso() -> str:
@@ -64,7 +65,7 @@ class SessionStore:
         tmp.write_text(
             session.model_dump_json(indent=2, by_alias=True), encoding="utf-8"
         )
-        tmp.rename(path)
+        replace_file(tmp, path)
         return session
 
     def load(self, agent_name: str) -> SessionState | None:

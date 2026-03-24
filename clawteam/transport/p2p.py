@@ -15,6 +15,7 @@ from clawteam.team.models import get_data_dir
 from clawteam.transport.base import Transport
 from clawteam.transport.claimed import ClaimedMessage
 from clawteam.transport.file import FileTransport
+from clawteam.fsutil import replace_file
 
 
 def _peers_dir(team_name: str) -> Path:

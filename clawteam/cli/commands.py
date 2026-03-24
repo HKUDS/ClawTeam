@@ -2610,7 +2610,7 @@ def lifecycle_on_exit(
 
 @app.command("spawn")
 def spawn_agent(
-    backend: Optional[str] = typer.Argument(None, help="Backend: tmux (default) or subprocess"),
+    backend: Optional[str] = typer.Argument(None, help="Backend: tmux, subprocess, or windows"),
     command: list[str] = typer.Argument(None, help="Command and arguments to run (default: claude)"),
     team: Optional[str] = typer.Option(None, "--team", "-t", help="Team name"),
     agent_name: Optional[str] = typer.Option(None, "--agent-name", "-n", help="Agent name"),
@@ -2625,11 +2625,13 @@ def spawn_agent(
 ):
     """Spawn a new agent process with identity + task as its initial prompt.
 
-    Defaults: tmux backend, claude command, git worktree isolation, skip-permissions on.
+    Defaults: tmux backend on Unix, subprocess backend on Windows, claude command,
+    git worktree isolation, skip-permissions on.
 
     Backends:
       tmux        - Launch in tmux windows (visual monitoring)
       subprocess  - Launch as background processes
+      windows     - Alias for subprocess, intended for native Windows setups
     """
     from clawteam.config import get_effective
     from clawteam.spawn import get_backend
@@ -2972,11 +2974,18 @@ def board_serve(
 def board_attach(
     team: str = typer.Argument(..., help="Team name"),
 ):
-    """Attach to tmux session with all agent windows tiled side by side.
+    """Attach to a live team monitor.
 
-    Merges all agent tmux windows into a single tiled view so you can
-    watch every agent working simultaneously.
+    On Unix/tmux setups this opens the tiled tmux view. On Windows, tmux is not
+    available, so fall back to the Web board and explain how to open it.
     """
+    import os
+
+    if os.name == "nt":
+        console.print("[yellow]tmux board attach is not available on Windows.[/yellow]")
+        console.print("Use [bold]clawteam board serve[/bold] and open the Web UI instead.")
+        raise typer.Exit(1)
+
     from clawteam.spawn.tmux_backend import TmuxBackend
 
     result = TmuxBackend.attach_all(team)

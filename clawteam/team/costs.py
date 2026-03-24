@@ -10,6 +10,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from clawteam.team.models import get_data_dir
+from clawteam.fsutil import replace_file
 
 
 def _now_iso() -> str:
@@ -111,7 +112,7 @@ def _write_summary_cache(team_name: str, cache: _CostSummaryCache) -> None:
     path = _summary_cache_path(team_name)
     tmp = path.with_suffix(".tmp")
     tmp.write_text(cache.model_dump_json(indent=2, by_alias=True), encoding="utf-8")
-    tmp.rename(path)
+    replace_file(tmp, path)
 
 
 def _normalize_cost(value: float) -> float:
@@ -249,7 +250,7 @@ class CostStore:
         tmp.write_text(
             event.model_dump_json(indent=2, by_alias=True), encoding="utf-8"
         )
-        tmp.rename(path)
+        replace_file(tmp, path)
         try:
             _record_event_in_summary_cache(self.team_name, path, event)
         except Exception:

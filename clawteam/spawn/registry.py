@@ -9,6 +9,7 @@ import subprocess
 import time
 from pathlib import Path
 
+from clawteam.fsutil import replace_file
 from clawteam.team.models import get_data_dir
 
 
@@ -61,7 +62,7 @@ def is_agent_alive(team_name: str, agent_name: str) -> bool | None:
             if pid:
                 return _pid_alive(pid)
         return alive
-    elif backend == "subprocess":
+    elif backend in {"subprocess", "windows"}:
         return _pid_alive(info.get("pid", 0))
     return None
 
@@ -99,7 +100,7 @@ def stop_agent(team_name: str, agent_name: str, timeout_seconds: float = 3.0) ->
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-    elif backend == "subprocess":
+    elif backend in {"subprocess", "windows"}:
         pid = info.get("pid", 0)
         if pid:
             try:
@@ -175,7 +176,7 @@ def _save(path: Path, data: dict) -> None:
         import os
         with os.fdopen(fd, "w") as f:
             json.dump(data, f, indent=2)
-        Path(tmp).replace(path)
+        replace_file(Path(tmp), path)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
         raise
