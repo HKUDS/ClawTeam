@@ -108,6 +108,14 @@ class TestTaskUpdate:
         assert completed.locked_by == ""
         assert completed.locked_at == ""
 
+    def test_review_clears_lock(self, store):
+        t = store.create("ready for review")
+        with patch("clawteam.team.tasks.TaskStore._acquire_lock"):
+            store.update(t.id, status=TaskStatus.in_progress, caller="agent-1")
+        reviewed = store.update(t.id, status=TaskStatus.review)
+        assert reviewed.locked_by == ""
+        assert reviewed.locked_at == ""
+
     def test_updated_at_changes(self, store):
         t = store.create("ts-check")
         original_ts = t.updated_at
@@ -126,9 +134,16 @@ class TestTaskList:
     def test_list_filter_by_status(self, store):
         store.create("pending-one")
         t2 = store.create("blocked-one", blocked_by=["fake-dep"])
+        t3 = store.create("review-one")
+        store.update(t3.id, status=TaskStatus.review)
+
         tasks = store.list_tasks(status=TaskStatus.blocked)
         assert len(tasks) == 1
         assert tasks[0].id == t2.id
+
+        review_tasks = store.list_tasks(status=TaskStatus.review)
+        assert len(review_tasks) == 1
+        assert review_tasks[0].id == t3.id
 
     def test_list_filter_by_owner(self, store):
         store.create("alice-task", owner="alice")
@@ -309,10 +324,13 @@ class TestGetStats:
         store.create("two")
         t3 = store.create("three")
         store.update(t3.id, status=TaskStatus.completed)
+        t4 = store.create("four")
+        store.update(t4.id, status=TaskStatus.review)
 
         stats = store.get_stats()
-        assert stats["total"] == 3
+        assert stats["total"] == 4
         assert stats["completed"] == 1
+        assert stats["review"] == 1
         assert stats["pending"] == 2
 
     def test_stats_with_timed_tasks(self, store):

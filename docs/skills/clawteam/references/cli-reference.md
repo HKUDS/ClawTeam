@@ -199,7 +199,7 @@ clawteam task update <team> <task-id> [options]
 
 | Option | Description |
 |--------|-------------|
-| `--status, -s` | New status: `pending`, `in_progress`, `completed`, `blocked` |
+| `--status, -s` | New status: `pending`, `in_progress`, `review`, `completed`, `blocked` |
 | `--owner, -o` | New owner |
 | `--subject` | New subject |
 | `--description, -d` | New description |
@@ -369,6 +369,7 @@ eval $(clawteam identity set --agent-name alice --team dev-team)
 |--------|-------------|
 | `pending` | Not yet started |
 | `in_progress` | Currently being worked on |
+| `review` | Submitted for review |
 | `completed` | Done (auto-unblocks dependents) |
 | `blocked` | Waiting on other tasks |
 

@@ -13,6 +13,7 @@
   --green: #22c55e;
   --blue: #3b82f6;
   --red: #ef4444;
+  --purple: #a855f7;
   --border: rgba(255, 255, 255, 0.06);
   --border-strong: rgba(255, 255, 255, 0.12);
   --glow: rgba(249, 115, 22, 0.15);
@@ -422,6 +423,10 @@ img {
 .t-blocked {
   background: rgba(239, 68, 68, 0.1);
   color: var(--red);
+}
+.t-review {
+  background: rgba(168, 85, 247, 0.12);
+  color: var(--purple);
 }
 
 .terminal-cursor {
