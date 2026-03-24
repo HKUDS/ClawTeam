@@ -154,6 +154,13 @@ Examples:
 
 This runbook is intentionally generic and contains no user-specific remotes, usernames, or local secrets.
 
+## Windows Caveats
+
+- Native Windows uses the `windows`/`subprocess` backend, not tmux panes.
+- For a live monitor on Windows, use `board serve` and open the web UI.
+- tmux-style tiled attach remains a Unix/Linux-first feature upstream.
+- If you need exact Linux/tmux behavior, use WSL as an optional advanced mode.
+
 ## Suggested Next Step
 
 Run the smoke test, then start using the wrapper scripts for normal operation.
