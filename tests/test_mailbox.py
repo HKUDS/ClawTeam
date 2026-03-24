@@ -1,11 +1,14 @@
 """Tests for clawteam.team.mailbox — MailboxManager send/receive/broadcast."""
 
-import fcntl
 import json
 import os
 import socket
+import sys
 import time
 from pathlib import Path
+
+if sys.platform != "win32":
+    import fcntl
 
 from clawteam.team.mailbox import MailboxManager
 from clawteam.team.manager import TeamManager
@@ -314,6 +317,9 @@ class TestReceiveQuarantine:
         assert mb.peek_count("bob") == 1
 
     def test_receive_skips_locked_preclaimed_consumed_message(self, team_name):
+        if sys.platform == "win32":
+            return
+
         mb = _make_mailbox(team_name)
         inbox = _inbox_path(team_name, "bob")
         consumed = inbox / "msg-0001-valid.consumed"
@@ -339,6 +345,9 @@ class TestReceiveQuarantine:
         assert [msg.content for msg in received] == ["locked"]
 
     def test_peek_and_count_skip_locked_preclaimed_consumed_message(self, team_name):
+        if sys.platform == "win32":
+            return
+
         mb = _make_mailbox(team_name)
         inbox = _inbox_path(team_name, "bob")
         consumed = inbox / "msg-0001-valid.consumed"

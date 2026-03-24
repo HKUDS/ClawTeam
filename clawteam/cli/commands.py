@@ -2974,11 +2974,18 @@ def board_serve(
 def board_attach(
     team: str = typer.Argument(..., help="Team name"),
 ):
-    """Attach to tmux session with all agent windows tiled side by side.
+    """Attach to a live team monitor.
 
-    Merges all agent tmux windows into a single tiled view so you can
-    watch every agent working simultaneously.
+    On Unix/tmux setups this opens the tiled tmux view. On Windows, tmux is not
+    available, so fall back to the Web board and explain how to open it.
     """
+    import os
+
+    if os.name == "nt":
+        console.print("[yellow]tmux board attach is not available on Windows.[/yellow]")
+        console.print("Use [bold]clawteam board serve[/bold] and open the Web UI instead.")
+        raise typer.Exit(1)
+
     from clawteam.spawn.tmux_backend import TmuxBackend
 
     result = TmuxBackend.attach_all(team)

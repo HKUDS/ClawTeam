@@ -133,6 +133,10 @@ Included in `scripts/`:
 - `clawteam-win.ps1` — wrapper for `python -m clawteam`
 - `smoke-test-win.ps1` — quick Windows smoke test
 - `spawn-worker-win.ps1` — helper to spawn a Windows worker
+- `board-serve-win.ps1` — start the web board on a chosen host/port
+- `session-save-win.ps1` — save session metadata quickly
+- `session-show-win.ps1` — show session metadata for a team
+- `soak-test-win.ps1` — repeated task/inbox/session/cost loop for Windows soak testing
 
 Examples:
 
@@ -140,14 +144,15 @@ Examples:
 ./scripts/clawteam-win.ps1 config show
 ./scripts/smoke-test-win.ps1
 ./scripts/spawn-worker-win.ps1 -Team demo-win -AgentName worker1 -Task "Do the task"
+./scripts/board-serve-win.ps1 -Team demo-win -Port 8080
+./scripts/session-save-win.ps1 -Team demo-win -Agent leader -SessionId sess-001
+./scripts/session-show-win.ps1 -Team demo-win
+./scripts/soak-test-win.ps1 -Team soak-win -Iterations 10
 ```
 
-## Git / PR Status
+## Publishing Note
 
-This work has been prepared and published as:
-
-- Branch: `windows-compat`
-- PR: `https://github.com/HKUDS/ClawTeam/pull/82`
+This runbook is intentionally generic and contains no user-specific remotes, usernames, or local secrets.
 
 ## Suggested Next Step
 

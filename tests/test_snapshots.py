@@ -1,9 +1,12 @@
 """Tests for clawteam.team.snapshot — team state checkpoint/restore."""
 
-import fcntl
 import json
+import sys
 
 import pytest
+
+if sys.platform != "win32":
+    import fcntl
 
 from clawteam.team.costs import CostStore
 from clawteam.team.manager import TeamManager
@@ -130,6 +133,9 @@ class TestSnapshotCreate:
         assert total_inbox >= 1
 
     def test_snapshot_skips_actively_locked_consumed_message(self, team_with_data):
+        if sys.platform == "win32":
+            return
+
         team_dir = get_data_dir() / "teams" / team_with_data
         inbox = team_dir / "inboxes" / "leader"
         inbox.mkdir(parents=True, exist_ok=True)

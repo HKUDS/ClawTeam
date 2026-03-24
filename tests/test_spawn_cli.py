@@ -84,7 +84,7 @@ def test_spawn_cli_rejects_removed_acpx_backend(monkeypatch, tmp_path):
     )
 
     assert result.exit_code == 1
-    assert "Unknown spawn backend: acpx. Available: subprocess, tmux" in result.output
+    assert "Unknown spawn backend: acpx. Available: subprocess, tmux, windows" in result.output
 
 
 def test_launch_cli_rejects_removed_acpx_backend(monkeypatch, tmp_path):
@@ -99,7 +99,7 @@ def test_launch_cli_rejects_removed_acpx_backend(monkeypatch, tmp_path):
     )
 
     assert result.exit_code == 1
-    assert "Unknown spawn backend: acpx. Available: subprocess, tmux" in result.output
+    assert "Unknown spawn backend: acpx. Available: subprocess, tmux, windows" in result.output
 
 
 def test_spawn_cli_applies_profile_command_and_env(monkeypatch, tmp_path):

@@ -1,5 +1,6 @@
 """Tests for clawteam.config — load/save/get_effective."""
 
+import os
 
 from clawteam.config import ClawTeamConfig, config_path, get_effective, load_config, save_config
 
@@ -9,7 +10,7 @@ class TestClawTeamConfig:
         cfg = ClawTeamConfig()
         assert cfg.data_dir == ""
         assert cfg.user == ""
-        assert cfg.default_backend == "tmux"
+        assert cfg.default_backend == ("subprocess" if os.name == "nt" else "tmux")
         assert cfg.skip_permissions is True
         assert cfg.timezone == "UTC"
         assert cfg.workspace == "auto"
@@ -25,6 +26,7 @@ class TestClawTeamConfig:
 
 class TestLoadSaveConfig:
     def test_load_returns_defaults_when_no_file(self):
+        save_config(ClawTeamConfig())
         cfg = load_config()
         assert cfg == ClawTeamConfig()
 
@@ -67,18 +69,20 @@ class TestGetEffective:
 
     def test_default_fallback(self, monkeypatch):
         monkeypatch.delenv("CLAWTEAM_USER", raising=False)
+        save_config(ClawTeamConfig())
         # user defaults to "" in ClawTeamConfig, so no file value -> falls through
         val, source = get_effective("user")
         assert val == ""
         assert source == "default"
 
     def test_default_backend_treated_as_file(self, monkeypatch):
-        """default_backend has a non-empty default ('tmux'), so load_config()
+        """default_backend has a non-empty default, so load_config()
         returns the default value with source='default' when no config file
         overrides it."""
         monkeypatch.delenv("CLAWTEAM_DEFAULT_BACKEND", raising=False)
+        save_config(ClawTeamConfig())
         val, source = get_effective("default_backend")
-        assert val == "tmux"
+        assert val == ("subprocess" if os.name == "nt" else "tmux")
         assert source == "default"
 
     def test_data_dir_env(self, monkeypatch):
