@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import io
+import json
 from pathlib import Path
 
 from clawteam.board.collector import BoardCollector
 from clawteam.board.server import BoardHandler
 from clawteam.team.mailbox import MailboxManager
 from clawteam.team.manager import TeamManager
+from clawteam.team.tasks import TaskStore
 
 
 def test_collect_overview_does_not_call_collect_team(monkeypatch, tmp_path: Path):
@@ -282,3 +284,108 @@ def test_serve_sse_uses_shared_team_snapshot_cache(monkeypatch):
     handler._serve_sse("demo")
 
     assert calls["count"] == 1
+
+
+def test_handle_create_team(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("CLAWTEAM_DATA_DIR", str(tmp_path))
+
+    handler = object.__new__(BoardHandler)
+    body = json.dumps({"name": "new-team"}).encode("utf-8")
+    handler.headers = {"Content-Length": str(len(body))}
+    handler.rfile = io.BytesIO(body)
+
+    served = {}
+    handler._serve_json = lambda data: served.update(data)
+    handler.send_error = lambda code, msg: served.update({"error_code": code, "error_msg": msg})
+
+    handler._handle_create_team()
+
+    assert "error_code" not in served, f"Error: {served.get('error_msg')}"
+    assert served == {"status": "created", "name": "new-team"}
+    assert TeamManager.get_team("new-team") is not None
+
+
+def test_handle_create_task(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("CLAWTEAM_DATA_DIR", str(tmp_path))
+    TeamManager.create_team("demo", "lead", "l1")
+
+    handler = object.__new__(BoardHandler)
+    body = json.dumps({"subject": "task1", "description": "desc1"}).encode("utf-8")
+    handler.headers = {"Content-Length": str(len(body))}
+    handler.rfile = io.BytesIO(body)
+
+    served = {}
+    handler._serve_json = lambda data: served.update(data)
+    handler.send_error = lambda code, msg: served.update({"error_code": code, "error_msg": msg})
+
+    handler._handle_create_task("demo")
+
+    assert "error_code" not in served, f"Error: {served.get('error_msg')}"
+    assert served["subject"] == "task1"
+    assert served["description"] == "desc1"
+    assert "id" in served
+
+    store = TaskStore("demo")
+    assert len(store.list_tasks()) == 1
+
+
+def test_handle_update_task(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("CLAWTEAM_DATA_DIR", str(tmp_path))
+    TeamManager.create_team("demo", "lead", "l1")
+    store = TaskStore("demo")
+    task = store.create("original", owner="lead")
+
+    handler = object.__new__(BoardHandler)
+    body = json.dumps({"status": "completed", "caller": "lead"}).encode("utf-8")
+    handler.headers = {"Content-Length": str(len(body))}
+    handler.rfile = io.BytesIO(body)
+
+    served = {}
+    handler._serve_json = lambda data: served.update(data)
+    handler.send_error = lambda code, msg: served.update({"error_code": code, "error_msg": msg})
+
+    handler._handle_update_task("demo", task.id)
+
+    assert "error_code" not in served, f"Error: {served.get('error_msg')}"
+    assert served["status"] == "completed"
+
+    updated_task = store.get(task.id)
+    assert updated_task.status.value == "completed"
+
+
+def test_handle_send_message(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("CLAWTEAM_DATA_DIR", str(tmp_path))
+    TeamManager.create_team("demo", "lead", "l1")
+    TeamManager.add_member("demo", "worker", "w1")
+
+    handler = object.__new__(BoardHandler)
+    body = json.dumps({"to": "worker", "content": "hello", "from": "lead"}).encode("utf-8")
+    handler.headers = {"Content-Length": str(len(body))}
+    handler.rfile = io.BytesIO(body)
+
+    served = {}
+    handler._serve_json = lambda data: served.update(data)
+    handler.send_error = lambda code, msg: served.update({"error_code": code, "error_msg": msg})
+
+    handler._handle_send_message("demo")
+
+    assert "error_code" not in served, f"Error: {served.get('error_msg')}"
+    assert served["content"] == "hello"
+    assert served["to"] == "worker"
+    assert served["from"] == "lead"
+
+
+def test_handle_cleanup_team(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("CLAWTEAM_DATA_DIR", str(tmp_path))
+    TeamManager.create_team("demo", "lead", "l1")
+
+    handler = object.__new__(BoardHandler)
+
+    served = {}
+    handler._serve_json = lambda data: served.update(data)
+    handler.send_error = lambda code, msg: served.update({"error_code": code, "error_msg": msg})
+
+    handler._handle_cleanup_team("demo")
+
+    assert served == {"status": "deleted", "name": "demo"}
+    assert TeamManager.get_team("demo") is None
