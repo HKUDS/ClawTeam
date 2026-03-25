@@ -25,6 +25,7 @@ class DummyProcess:
 
 
 def test_subprocess_backend_prepends_current_clawteam_bin_to_path(monkeypatch, tmp_path):
+    monkeypatch.delenv("CLAWTEAM_BIN", raising=False)
     monkeypatch.setenv("PATH", "/usr/bin:/bin")
     clawteam_bin = tmp_path / "venv" / "bin" / "clawteam"
     clawteam_bin.parent.mkdir(parents=True)
@@ -120,6 +121,7 @@ def test_subprocess_backend_discards_output_and_preserves_exit_hook_and_registry
 
 
 def test_tmux_backend_exports_spawn_path_for_agent_commands(monkeypatch, tmp_path):
+    monkeypatch.delenv("CLAWTEAM_BIN", raising=False)
     monkeypatch.setenv("PATH", "/usr/bin:/bin")
     monkeypatch.setenv("CLAWTEAM_DATA_DIR", "/tmp/clawteam-data")
     monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "demo-project")

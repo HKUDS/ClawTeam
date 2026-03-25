@@ -1829,7 +1829,7 @@ def task_get(
 def task_update(
     team: str = typer.Argument(..., help="Team name"),
     task_id: str = typer.Argument(..., help="Task ID"),
-    status: Optional[str] = typer.Option(None, "--status", "-s", help="New status: pending, in_progress, completed, blocked"),
+    status: Optional[str] = typer.Option(None, "--status", "-s", help="New status: pending, in_progress, review, completed, blocked"),
     owner: Optional[str] = typer.Option(None, "--owner", "-o", help="New owner"),
     subject: Optional[str] = typer.Option(None, "--subject", help="New subject"),
     description: Optional[str] = typer.Option(None, "--description", "-d", help="New description"),
@@ -1912,7 +1912,7 @@ def task_list(
         table.add_column("Blocked By", style="dim")
         for t in items:
             st = t.get("status", "")
-            style = {"pending": "white", "in_progress": "yellow", "completed": "green", "blocked": "red"}.get(st, "")
+            style = {"pending": "white", "in_progress": "yellow", "review": "magenta", "completed": "green", "blocked": "red"}.get(st, "")
             priority_value = t.get("priority", "medium")
             priority_style = {
                 "urgent": "red bold",
@@ -1951,6 +1951,7 @@ def task_stats(
         table.add_row("Total tasks", str(d["total"]))
         table.add_row("Completed", str(d["completed"]))
         table.add_row("In progress", str(d["in_progress"]))
+        table.add_row("Review", str(d.get("review", 0)))
         table.add_row("Pending", str(d["pending"]))
         table.add_row("Blocked", str(d["blocked"]))
         table.add_row("With timing data", str(d["timed_completed"]))
@@ -2159,7 +2160,7 @@ def task_wait(
 
     last_progress = ""
 
-    def _on_progress(completed, total, in_progress, pending, blocked):
+    def _on_progress(completed, total, in_progress, review, pending, blocked):
         nonlocal last_progress
         summary = f"{completed}/{total}"
         if summary == last_progress:
@@ -2171,13 +2172,14 @@ def task_wait(
                 "completed": completed,
                 "total": total,
                 "in_progress": in_progress,
+                "review": review,
                 "pending": pending,
                 "blocked": blocked,
             }), flush=True)
         else:
             console.print(
                 f"  {completed}/{total} tasks completed"
-                f"  ({in_progress} in progress, {pending} pending, {blocked} blocked)"
+                f"  ({in_progress} in progress, {review} review, {pending} pending, {blocked} blocked)"
             )
 
     if not _json_output:
@@ -2223,6 +2225,7 @@ def task_wait(
             "total": result.total,
             "completed": result.completed,
             "in_progress": result.in_progress,
+            "review": result.review,
             "pending": result.pending,
             "blocked": result.blocked,
             "messages_received": result.messages_received,

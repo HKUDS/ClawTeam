@@ -182,7 +182,7 @@ function TerminalMockup() {
           <div className="t-status-header">docs-sprint <span className="t-dim">3 agents active</span></div>
           <div className="t-status-row"><span className="t-success">{"\u25cf"}</span> T-001 Build landing page <span className="t-badge t-done">done</span></div>
           <div className="t-status-row"><span className="t-active">{"\u25cf"}</span> T-002 Write API docs <span className="t-badge t-progress">active</span></div>
-          <div className="t-status-row"><span className="t-dim">{"\u25cb"}</span> T-003 Review &amp; merge <span className="t-badge t-blocked">blocked</span></div>
+          <div className="t-status-row"><span className="t-active">{"\u25cf"}</span> T-003 Review &amp; merge <span className="t-badge t-review">review</span></div>
         </div>
         <div className="terminal-line" style={{marginTop:10}}><span className="t-prompt">$</span> <span className="terminal-cursor"/></div>
       </div>

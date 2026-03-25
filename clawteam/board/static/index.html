@@ -82,7 +82,7 @@ const S = {
 
   // Summary cards
   summaryGrid: {
-    display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
+    display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)',
     gap: 12, marginBottom: 24,
   },
   summaryCard: {
@@ -265,7 +265,7 @@ const S = {
 
   // Kanban
   kanban: {
-    display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
+    display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)',
     gap: 12,
   },
   kanbanCol: {
@@ -329,6 +329,7 @@ function SummaryCards({ summary }) {
   const items = [
     { key: 'pending', label: 'Pending', color: 'var(--orange)' },
     { key: 'in_progress', label: 'In Progress', color: 'var(--blue)' },
+    { key: 'review', label: 'Review', color: 'var(--purple)' },
     { key: 'completed', label: 'Completed', color: 'var(--green)' },
     { key: 'blocked', label: 'Blocked', color: 'var(--red)' },
   ];
@@ -530,6 +531,7 @@ function Kanban({ tasks }) {
   const cols = [
     { key: 'pending', label: 'Pending', color: 'var(--orange)' },
     { key: 'in_progress', label: 'In Progress', color: 'var(--blue)' },
+    { key: 'review', label: 'Review', color: 'var(--purple)' },
     { key: 'completed', label: 'Completed', color: 'var(--green)' },
     { key: 'blocked', label: 'Blocked', color: 'var(--red)' },
   ];

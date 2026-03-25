@@ -93,12 +93,8 @@ class BoardCollector:
 
         # Tasks grouped by status
         all_tasks = store.list_tasks()
-        grouped: dict[str, list[dict]] = {
-            "pending": [],
-            "in_progress": [],
-            "completed": [],
-            "blocked": [],
-        }
+        from clawteam.team.models import TaskStatus
+        grouped: dict[str, list[dict]] = {s.value: [] for s in TaskStatus}
         for t in all_tasks:
             td = json.loads(t.model_dump_json(by_alias=True, exclude_none=True))
             grouped[t.status.value].append(td)

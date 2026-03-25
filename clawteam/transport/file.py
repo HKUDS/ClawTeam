@@ -17,19 +17,23 @@ def _teams_root() -> Path:
     return get_data_dir() / "teams"
 
 
-def _inbox_dir(team_name: str, agent_name: str) -> Path:
+def _inbox_dir(team_name: str, agent_name: str, create: bool = True) -> Path:
     d = _teams_root() / team_name / "inboxes" / agent_name
-    d.mkdir(parents=True, exist_ok=True)
+    if create:
+        d.mkdir(parents=True, exist_ok=True)
     return d
 
 
-def _dead_letter_dir(team_name: str, agent_name: str) -> Path:
+def _dead_letter_dir(team_name: str, agent_name: str, create: bool = True) -> Path:
     d = _teams_root() / team_name / "dead_letters" / agent_name
-    d.mkdir(parents=True, exist_ok=True)
+    if create:
+        d.mkdir(parents=True, exist_ok=True)
     return d
 
 
 def _claimable_paths(inbox: Path) -> list[Path]:
+    if not inbox.exists():
+        return []
     paths = list(inbox.glob("msg-*.json"))
     paths.extend(inbox.glob("msg-*.consumed"))
     return sorted(paths)
@@ -108,7 +112,7 @@ class FileTransport(Transport):
             raise
 
     def claim_messages(self, agent_name: str, limit: int = 10) -> list[ClaimedMessage]:
-        inbox = _inbox_dir(self.team_name, agent_name)
+        inbox = _inbox_dir(self.team_name, agent_name, create=False)
         claimed: list[ClaimedMessage] = []
         for path in _claimable_paths(inbox)[:limit]:
             consumed = path
@@ -180,7 +184,7 @@ class FileTransport(Transport):
         )
 
     def fetch(self, agent_name: str, limit: int = 10, consume: bool = True) -> list[bytes]:
-        inbox = _inbox_dir(self.team_name, agent_name)
+        inbox = _inbox_dir(self.team_name, agent_name, create=False)
         if consume:
             messages = []
             for claimed in self.claim_messages(agent_name, limit):
@@ -200,7 +204,9 @@ class FileTransport(Transport):
         return messages
 
     def count(self, agent_name: str) -> int:
-        inbox = _inbox_dir(self.team_name, agent_name)
+        inbox = _inbox_dir(self.team_name, agent_name, create=False)
+        if not inbox.exists():
+            return 0
         return sum(
             1
             for path in _claimable_paths(inbox)

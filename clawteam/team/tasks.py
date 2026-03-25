@@ -122,8 +122,10 @@ class TaskStore:
                 if not task.started_at:
                     task.started_at = _now_iso()
 
-            # Clear lock when transitioning to completed or pending
-            if status in (TaskStatus.completed, TaskStatus.pending):
+            # Clear lock when transitioning out of active execution. Review is
+            # a handoff state, so it should not remain locked to the worker
+            # that finished the implementation.
+            if status in (TaskStatus.completed, TaskStatus.pending, TaskStatus.review):
                 task.locked_by = ""
                 task.locked_at = ""
 
@@ -271,6 +273,7 @@ class TaskStore:
             "total": len(tasks),
             "completed": len(completed),
             "in_progress": sum(1 for t in tasks if t.status == TaskStatus.in_progress),
+            "review": sum(1 for t in tasks if t.status == TaskStatus.review),
             "pending": sum(1 for t in tasks if t.status == TaskStatus.pending),
             "blocked": sum(1 for t in tasks if t.status == TaskStatus.blocked),
             "timed_completed": len(durations),
