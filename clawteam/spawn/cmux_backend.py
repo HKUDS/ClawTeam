@@ -161,12 +161,20 @@ class CmuxBackend(SpawnBackend):
             f"{exit_cmd} lifecycle on-exit --team {shlex.quote(team_name)} "
             f"--agent {shlex.quote(agent_name)}"
         )
+        # Auto-close cmux workspace after agent exits + lifecycle cleanup.
+        # 30s delay lets user inspect scrollback before workspace disappears.
+        # The workspace name is set later; use team-agent format.
+        ws_name = f"{team_name}-{agent_name}"
+        cmux_cleanup = (
+            f"echo '\\n[Agent exited. Workspace closes in 30s. Press Ctrl-C to keep.]'; "
+            f"sleep 30 && {shlex.quote(_CMUX_BIN)} close-workspace --workspace {shlex.quote(ws_name)} 2>/dev/null"
+        )
         # Unset Claude nesting-detection env vars so spawned agents don't refuse to start
         unset_clause = "unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_SESSION 2>/dev/null; "
         if cwd:
-            full_cmd = f"{unset_clause}{export_str}; cd {shlex.quote(cwd)} && {cmd_str}; {exit_hook}"
+            full_cmd = f"{unset_clause}{export_str}; cd {shlex.quote(cwd)} && {cmd_str}; {exit_hook}; {cmux_cleanup}"
         else:
-            full_cmd = f"{unset_clause}{export_str}; {cmd_str}; {exit_hook}"
+            full_cmd = f"{unset_clause}{export_str}; {cmd_str}; {exit_hook}; {cmux_cleanup}"
 
         # Remember current workspace to restore focus after spawn
         previous_workspace = _cmux_get_current_workspace()
