@@ -190,7 +190,7 @@ class CmuxBackend(SpawnBackend):
         # Parse workspace ref from stdout: "OK workspace:N"
         workspace_ref = None
         stdout = launch.stdout.strip()
-        match = re.search(r"workspace:(\S+)", stdout)
+        match = re.search(r"(workspace:\S+)", stdout)
         if match:
             workspace_ref = match.group(1)
 
@@ -206,7 +206,7 @@ class CmuxBackend(SpawnBackend):
         # Restore focus to previous workspace to avoid focus steal
         if previous_workspace:
             subprocess.run(
-                [_CMUX_BIN, "focus-workspace", "--workspace", previous_workspace],
+                [_CMUX_BIN, "select-workspace", "--workspace", previous_workspace],
                 capture_output=True,
                 text=True,
                 timeout=5,
