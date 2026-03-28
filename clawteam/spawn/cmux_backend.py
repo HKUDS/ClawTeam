@@ -178,7 +178,7 @@ class CmuxBackend(SpawnBackend):
         # Unset Claude nesting-detection env vars so spawned agents don't refuse to start
         unset_clause = "unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_SESSION 2>/dev/null; "
         if cwd:
-            full_cmd = f"{unset_clause}{export_str}; cd {shlex.quote(cwd)} && {cmd_str}; {exit_hook}; {cmux_cleanup}"
+            full_cmd = f"{unset_clause}{export_str}; cd {shlex.quote(cwd)} || exit 1; {cmd_str}; {exit_hook}; {cmux_cleanup}"
         else:
             full_cmd = f"{unset_clause}{export_str}; {cmd_str}; {exit_hook}; {cmux_cleanup}"
 
@@ -210,12 +210,15 @@ class CmuxBackend(SpawnBackend):
 
         # Rename workspace to team-agent format
         if workspace_ref:
-            subprocess.run(
+            rename_result = subprocess.run(
                 [_CMUX_BIN, "rename-workspace", "--workspace", workspace_ref, workspace_name],
                 capture_output=True,
                 text=True,
                 timeout=5,
             )
+            if rename_result.returncode != 0:
+                # Fall back to using the raw ref for subsequent operations
+                workspace_name = workspace_ref
 
         # Restore focus to previous workspace to avoid focus steal
         if previous_workspace:
@@ -256,12 +259,18 @@ class CmuxBackend(SpawnBackend):
             )
 
         if post_launch_prompt:
-            _wait_for_cli_ready(
+            ready = _wait_for_cli_ready(
                 workspace_name,
                 timeout_seconds=cfg.spawn_ready_timeout,
                 fallback_delay=cfg.spawn_prompt_delay,
             )
-            _inject_prompt_via_keys(workspace_name, post_launch_prompt)
+            if not _inject_prompt_via_keys(workspace_name, post_launch_prompt):
+                return (
+                    f"Warning: Agent '{agent_name}' workspace created but prompt injection failed. "
+                    f"CLI {'was' if ready else 'was NOT'} ready. "
+                    f"Send prompt manually: cmux send --workspace {workspace_name} '<prompt>' && "
+                    f"cmux send-key --workspace {workspace_name} Enter"
+                )
         elif (
             prompt
             and not is_codex_command(normalized_command)
@@ -271,12 +280,18 @@ class CmuxBackend(SpawnBackend):
             and not is_qwen_command(normalized_command)
             and not is_opencode_command(normalized_command)
         ):
-            _wait_for_cli_ready(
+            ready = _wait_for_cli_ready(
                 workspace_name,
                 timeout_seconds=cfg.spawn_ready_timeout,
                 fallback_delay=cfg.spawn_prompt_delay,
             )
-            _inject_prompt_via_keys(workspace_name, prompt)
+            if not _inject_prompt_via_keys(workspace_name, prompt):
+                return (
+                    f"Warning: Agent '{agent_name}' workspace created but prompt injection failed. "
+                    f"CLI {'was' if ready else 'was NOT'} ready. "
+                    f"Send prompt manually: cmux send --workspace {workspace_name} '<prompt>' && "
+                    f"cmux send-key --workspace {workspace_name} Enter"
+                )
 
         self._agents[agent_name] = workspace_name
 
@@ -295,7 +310,7 @@ class CmuxBackend(SpawnBackend):
 
     def list_running(self) -> list[dict[str, str]]:
         return [
-            {"name": name, "workspace": workspace, "backend": "cmux"}
+            {"name": name, "target": workspace, "backend": "cmux"}
             for name, workspace in self._agents.items()
         ]
 
@@ -350,19 +365,19 @@ def _confirm_workspace_trust_if_prompted(
         action = _startup_prompt_action(command, screen_text)
         if action == "enter":
             subprocess.run(
-                [_CMUX_BIN, "input-text", "--workspace", workspace_name, "--text", "\n"],
+                [_CMUX_BIN, "send-key", "--workspace", workspace_name, "Enter"],
                 capture_output=True, text=True, timeout=5,
             )
             time.sleep(0.5)
             return True
         if action == "down-enter":
             subprocess.run(
-                [_CMUX_BIN, "input-text", "--workspace", workspace_name, "--text", "\x1b[B"],
+                [_CMUX_BIN, "send-key", "--workspace", workspace_name, "Down"],
                 capture_output=True, text=True, timeout=5,
             )
             time.sleep(0.2)
             subprocess.run(
-                [_CMUX_BIN, "input-text", "--workspace", workspace_name, "--text", "\n"],
+                [_CMUX_BIN, "send-key", "--workspace", workspace_name, "Enter"],
                 capture_output=True, text=True, timeout=5,
             )
             time.sleep(0.5)
@@ -439,7 +454,7 @@ def _dismiss_codex_update_prompt_if_present(
         screen_text = _read_workspace_screen(workspace_name).lower()
         if _looks_like_codex_update_prompt(screen_text):
             subprocess.run(
-                [_CMUX_BIN, "input-text", "--workspace", workspace_name, "--text", "\n"],
+                [_CMUX_BIN, "send-key", "--workspace", workspace_name, "Enter"],
                 capture_output=True, text=True, timeout=5,
             )
             time.sleep(0.5)
@@ -495,23 +510,41 @@ def _wait_for_cli_ready(
     return False
 
 
-def _inject_prompt_via_keys(workspace_name: str, prompt: str) -> None:
-    """Inject a prompt into a cmux workspace via input-text.
+def _inject_prompt_via_keys(workspace_name: str, prompt: str) -> bool:
+    """Inject a prompt into a cmux workspace via send + send-key.
 
-    cmux doesn't have tmux's buffer mechanism, so we write the prompt
-    text directly followed by Enter keystrokes.
+    Uses `cmux send` for text (types into terminal) and `cmux send-key Enter`
+    to submit. Returns True if all commands succeeded.
     """
-    subprocess.run(
-        [_CMUX_BIN, "input-text", "--workspace", workspace_name, "--text", prompt],
-        capture_output=True, text=True, timeout=10,
-    )
-    time.sleep(0.5)
-    subprocess.run(
-        [_CMUX_BIN, "input-text", "--workspace", workspace_name, "--text", "\n"],
-        capture_output=True, text=True, timeout=5,
-    )
-    time.sleep(0.3)
-    subprocess.run(
-        [_CMUX_BIN, "input-text", "--workspace", workspace_name, "--text", "\n"],
-        capture_output=True, text=True, timeout=5,
-    )
+    # Write prompt text via temp file to handle multiline/special chars safely
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+        f.write(prompt)
+        prompt_file = f.name
+
+    try:
+        # Read prompt from file and send via cmux send
+        with open(prompt_file) as f:
+            prompt_text = f.read()
+
+        result = subprocess.run(
+            [_CMUX_BIN, "send", "--workspace", workspace_name, prompt_text],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            return False
+
+        time.sleep(0.5)
+
+        # Press Enter to submit
+        result = subprocess.run(
+            [_CMUX_BIN, "send-key", "--workspace", workspace_name, "Enter"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode != 0:
+            return False
+
+        return True
+    finally:
+        import os
+        os.unlink(prompt_file)
