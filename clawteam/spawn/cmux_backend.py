@@ -466,12 +466,6 @@ class CmuxBackend(SpawnBackend):
                     "using it with clawteam spawn."
                 )
 
-            _confirm_workspace_trust_if_prompted(
-                cmux_handle,
-                normalized_command,
-                timeout_seconds=cfg.spawn_ready_timeout,
-            )
-
             if post_launch_prompt and is_codex_command(normalized_command):
                 _dismiss_codex_update_prompt_if_present(
                     cmux_handle,
@@ -479,6 +473,15 @@ class CmuxBackend(SpawnBackend):
                     timeout_seconds=pane_ready_timeout,
                     poll_interval_seconds=0.2,
                 )
+
+        # Trust prompts appear per-CLI-process, not per-workspace — surfaces
+        # launching into fresh worktrees hit the same trust gate.
+        _confirm_trust_if_prompted(
+            cmux_handle,
+            normalized_command,
+            is_surface=is_surface,
+            timeout_seconds=cfg.spawn_ready_timeout,
+        )
 
         # --- Unified readiness + prompt injection (G2, G3) ---
         inject_text = post_launch_prompt
@@ -549,39 +552,42 @@ def _wait_for_cmux_workspace(
     return False
 
 
-def _confirm_workspace_trust_if_prompted(
-    workspace_name: str,
+def _confirm_trust_if_prompted(
+    handle: str,
     command: list[str],
+    is_surface: bool = False,
     timeout_seconds: float = 5.0,
     poll_interval_seconds: float = 0.2,
 ) -> bool:
     """Acknowledge startup confirmation prompts for interactive CLIs.
 
-    Claude Code and Codex can stop at a directory trust prompt when launched in
-    a fresh git worktree. Detect and dismiss before prompt injection.
+    Claude Code, Codex, and Gemini can stop at a directory trust prompt when
+    launched in a fresh git worktree.  Detect and dismiss before prompt
+    injection.  Works for both workspaces and surfaces.
     """
     if not (is_claude_command(command) or is_codex_command(command) or is_gemini_command(command)):
         return False
 
+    flag = "--surface" if is_surface else "--workspace"
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
-        screen_text = _read_screen(workspace_name).lower()
+        screen_text = _read_screen(handle, is_surface=is_surface).lower()
         action = _startup_prompt_action(command, screen_text)
         if action == "enter":
             subprocess.run(
-                [_CMUX_BIN, "send-key", "--workspace", workspace_name, "Enter"],
+                [_CMUX_BIN, "send-key", flag, handle, "Enter"],
                 capture_output=True, text=True, timeout=5,
             )
             time.sleep(0.5)
             return True
         if action == "down-enter":
             subprocess.run(
-                [_CMUX_BIN, "send-key", "--workspace", workspace_name, "Down"],
+                [_CMUX_BIN, "send-key", flag, handle, "Down"],
                 capture_output=True, text=True, timeout=5,
             )
             time.sleep(0.2)
             subprocess.run(
-                [_CMUX_BIN, "send-key", "--workspace", workspace_name, "Enter"],
+                [_CMUX_BIN, "send-key", flag, handle, "Enter"],
                 capture_output=True, text=True, timeout=5,
             )
             time.sleep(0.5)
