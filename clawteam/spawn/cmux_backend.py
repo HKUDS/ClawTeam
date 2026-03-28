@@ -315,9 +315,10 @@ class CmuxBackend(SpawnBackend):
         )
         # Auto-close cmux workspace after agent exits + cleanup badges.
         ws_name = f"{team_name}-{agent_name}"
-        # Clear sidebar badges on exit (prevents stale pill accumulation)
+        # Clear sidebar badges on exit. Use $CMUX_WORKSPACE_ID which cmux
+        # auto-sets in every shell it spawns — works for both workspace and surface mode.
         badge_cleanup = (
-            f"{shlex.quote(_CMUX_BIN)} clear-status agent 2>/dev/null"
+            f"{shlex.quote(_CMUX_BIN)} clear-status agent --workspace \"$CMUX_WORKSPACE_ID\" 2>/dev/null"
         )
         cmux_cleanup = (
             f"{badge_cleanup}; "
