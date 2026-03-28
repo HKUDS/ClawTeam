@@ -31,6 +31,7 @@ class SubprocessBackend(SpawnBackend):
         cwd: str | None = None,
         skip_permissions: bool = False,
         system_prompt: str | None = None,
+        parent_workspace: str | None = None,
     ) -> str:
         spawn_env = os.environ.copy()
         clawteam_bin = resolve_clawteam_executable()

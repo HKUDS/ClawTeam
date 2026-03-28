@@ -21,8 +21,13 @@ class SpawnBackend(ABC):
         cwd: str | None = None,
         skip_permissions: bool = False,
         system_prompt: str | None = None,
+        parent_workspace: str | None = None,
     ) -> str:
-        """Spawn a new agent process. Returns a status message."""
+        """Spawn a new agent process. Returns a status message.
+
+        If *parent_workspace* is set (cmux ref like ``workspace:N``), spawn as
+        a tab (surface) inside that workspace instead of creating a new one.
+        """
 
     @abstractmethod
     def list_running(self) -> list[dict[str, str]]:

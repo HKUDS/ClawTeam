@@ -2821,6 +2821,7 @@ def spawn_agent(
     resume: bool = typer.Option(False, "--resume", "-r", help="Resume previous session if available"),
     replace: bool = typer.Option(False, "--replace", help="Replace a running agent with the same name"),
     skill: Optional[list[str]] = typer.Option(None, "--skill", help="Skill name(s) to inject into the agent's system prompt (repeatable, claude only)"),
+    parent_workspace: Optional[str] = typer.Option(None, "--parent-workspace", help="Spawn as tab inside this cmux workspace ref (cmux backend only)"),
 ):
     """Spawn a new agent process with identity + task as its initial prompt.
 
@@ -3017,6 +3018,7 @@ def spawn_agent(
         cwd=cwd,
         skip_permissions=skip_permissions,
         system_prompt=system_prompt,
+        parent_workspace=parent_workspace,
     )
 
     if result.startswith("Error"):

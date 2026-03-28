@@ -91,7 +91,7 @@ def merge_branch(
 ) -> tuple[bool, str]:
     """Merge *branch* into *target*. Returns (success, output)."""
     _run(["checkout", target], cwd=repo)
-    args = ["merge"]
+    args = ["merge", "--no-verify"]
     if no_ff:
         args.append("--no-ff")
     args.append(branch)

@@ -107,6 +107,7 @@ class CmuxBackend(SpawnBackend):
         cwd: str | None = None,
         skip_permissions: bool = False,
         system_prompt: str | None = None,
+        parent_workspace: str | None = None,
     ) -> str:
         if not os.path.isfile(_CMUX_BIN):
             return f"Error: cmux not found at {_CMUX_BIN}"
@@ -186,60 +187,101 @@ class CmuxBackend(SpawnBackend):
         # Remember current workspace to restore focus after spawn
         previous_workspace = _cmux_get_current_workspace()
 
-        # Spawn workspace via cmux
         work_dir = cwd or os.getcwd()
-        try:
-            launch = subprocess.run(
-                [_CMUX_BIN, "new-workspace", "--cwd", work_dir, "--command", full_cmd],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-        except subprocess.TimeoutExpired:
-            return "Error: cmux new-workspace timed out after 30s"
+        spawned_as_surface = False
 
-        if launch.returncode != 0:
-            stderr = launch.stderr.strip() if launch.stderr else ""
-            return f"Error: failed to launch cmux workspace: {stderr}"
+        if parent_workspace:
+            # --- Surface mode: spawn as a tab inside the parent workspace ---
+            try:
+                launch = subprocess.run(
+                    [_CMUX_BIN, "new-surface", "--workspace", parent_workspace],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+            except subprocess.TimeoutExpired:
+                return "Error: cmux new-surface timed out after 30s"
 
-        # Parse workspace ref from stdout: "OK workspace:N"
-        workspace_ref = None
-        stdout = launch.stdout.strip()
-        match = re.search(r"(workspace:\S+)", stdout)
-        if match:
-            workspace_ref = match.group(1)
+            if launch.returncode != 0:
+                stderr = launch.stderr.strip() if launch.stderr else ""
+                return f"Error: failed to create cmux surface: {stderr}"
 
-        # Rename workspace to team-agent format (display name only)
-        if workspace_ref:
+            # Parse surface ref from stdout (e.g. "OK surface:N")
+            surface_ref = None
+            stdout = launch.stdout.strip()
+            m = re.search(r"(surface:\S+)", stdout)
+            if m:
+                surface_ref = m.group(1)
+
+            if not surface_ref:
+                return f"Error: could not parse surface ref from cmux output: {stdout}"
+
+            # Rename tab for identification
             subprocess.run(
-                [_CMUX_BIN, "rename-workspace", "--workspace", workspace_ref, workspace_name],
-                capture_output=True,
-                text=True,
-                timeout=5,
+                [_CMUX_BIN, "rename-tab", "--surface", surface_ref, workspace_name],
+                capture_output=True, text=True, timeout=5,
             )
-        # IMPORTANT: Use workspace_ref for ALL subsequent cmux operations.
-        # cmux commands require refs (workspace:N), not display names.
-        # workspace_name is only for display/rename purposes.
-        cmux_handle = workspace_ref or workspace_name
 
-        # Set team badge in sidebar
-        team_type = "side-quest" if team_name.startswith("sq-") else "build"
-        icon = "magnifier" if team_type == "side-quest" else "hammer"
-        color = "#007aff" if team_type == "side-quest" else "#ff9500"
-        subprocess.run(
-            [_CMUX_BIN, "set-status", "team", team_name,
-             "--icon", icon, "--color", color, "--workspace", cmux_handle],
-            capture_output=True, text=True, timeout=5,
-        )
-        # Set role badge in sidebar
-        subprocess.run(
-            [_CMUX_BIN, "set-status", "role", agent_name,
-             "--icon", "sparkle", "--workspace", cmux_handle],
-            capture_output=True, text=True, timeout=5,
-        )
+            # Send the full command to the new surface's terminal
+            subprocess.run(
+                [_CMUX_BIN, "send", "--surface", surface_ref, "--", full_cmd + "\n"],
+                capture_output=True, text=True, timeout=10,
+            )
+
+            cmux_handle = surface_ref
+            spawned_as_surface = True
+        else:
+            # --- Workspace mode: each agent gets its own sidebar workspace ---
+            try:
+                launch = subprocess.run(
+                    [_CMUX_BIN, "new-workspace", "--cwd", work_dir, "--command", full_cmd],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+            except subprocess.TimeoutExpired:
+                return "Error: cmux new-workspace timed out after 30s"
+
+            if launch.returncode != 0:
+                stderr = launch.stderr.strip() if launch.stderr else ""
+                return f"Error: failed to launch cmux workspace: {stderr}"
+
+            # Parse workspace ref from stdout: "OK workspace:N"
+            workspace_ref = None
+            stdout = launch.stdout.strip()
+            match = re.search(r"(workspace:\S+)", stdout)
+            if match:
+                workspace_ref = match.group(1)
+
+            # Rename workspace to team-agent format (display name only)
+            if workspace_ref:
+                subprocess.run(
+                    [_CMUX_BIN, "rename-workspace", "--workspace", workspace_ref, workspace_name],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+            # IMPORTANT: Use workspace_ref for ALL subsequent cmux operations.
+            cmux_handle = workspace_ref or workspace_name
+
+        if not spawned_as_surface:
+            # Set team badge in sidebar (only meaningful for workspace mode)
+            team_type = "side-quest" if team_name.startswith("sq-") else "build"
+            icon = "magnifier" if team_type == "side-quest" else "hammer"
+            color = "#007aff" if team_type == "side-quest" else "#ff9500"
+            subprocess.run(
+                [_CMUX_BIN, "set-status", "team", team_name,
+                 "--icon", icon, "--color", color, "--workspace", cmux_handle],
+                capture_output=True, text=True, timeout=5,
+            )
+            subprocess.run(
+                [_CMUX_BIN, "set-status", "role", agent_name,
+                 "--icon", "sparkle", "--workspace", cmux_handle],
+                capture_output=True, text=True, timeout=5,
+            )
 
         # Restore focus to previous workspace to avoid focus steal
-        if previous_workspace:
+        if previous_workspace and not spawned_as_surface:
             subprocess.run(
                 [_CMUX_BIN, "select-workspace", "--workspace", previous_workspace],
                 capture_output=True,
@@ -247,69 +289,72 @@ class CmuxBackend(SpawnBackend):
                 timeout=5,
             )
 
-        from clawteam.config import load_config
+        # Surface mode: command already sent via cmux send, skip readiness/prompt injection.
+        # Workspace mode: wait for workspace to appear, then inject prompt if needed.
+        if not spawned_as_surface:
+            from clawteam.config import load_config
 
-        cfg = load_config()
-        pane_ready_timeout = min(cfg.spawn_ready_timeout, max(4.0, cfg.spawn_prompt_delay + 2.0))
-        if not _wait_for_cmux_workspace(
-            workspace_name,
-            timeout_seconds=pane_ready_timeout,
-            poll_interval_seconds=0.2,
-        ):
-            return (
-                f"Error: cmux workspace for '{normalized_command[0]}' did not become visible "
-                f"within {pane_ready_timeout:.1f}s. Verify the CLI works standalone before "
-                "using it with clawteam spawn."
-            )
-
-        _confirm_workspace_trust_if_prompted(
-            cmux_handle,
-            normalized_command,
-            timeout_seconds=cfg.spawn_ready_timeout,
-        )
-
-        if post_launch_prompt and is_codex_command(normalized_command):
-            _dismiss_codex_update_prompt_if_present(
-                cmux_handle,
-                normalized_command,
+            cfg = load_config()
+            pane_ready_timeout = min(cfg.spawn_ready_timeout, max(4.0, cfg.spawn_prompt_delay + 2.0))
+            if not _wait_for_cmux_workspace(
+                workspace_name,
                 timeout_seconds=pane_ready_timeout,
                 poll_interval_seconds=0.2,
+            ):
+                return (
+                    f"Error: cmux workspace for '{normalized_command[0]}' did not become visible "
+                    f"within {pane_ready_timeout:.1f}s. Verify the CLI works standalone before "
+                    "using it with clawteam spawn."
+                )
+
+            _confirm_workspace_trust_if_prompted(
+                cmux_handle,
+                normalized_command,
+                timeout_seconds=cfg.spawn_ready_timeout,
             )
 
-        if post_launch_prompt:
-            ready = _wait_for_cli_ready(
-                cmux_handle,
-                timeout_seconds=cfg.spawn_ready_timeout,
-                fallback_delay=cfg.spawn_prompt_delay,
-            )
-            if not _inject_prompt_via_keys(cmux_handle, post_launch_prompt):
-                return (
-                    f"Warning: Agent '{agent_name}' workspace created but prompt injection failed. "
-                    f"CLI {'was' if ready else 'was NOT'} ready. "
-                    f"Send prompt manually: cmux send --workspace {cmux_handle} '<prompt>' && "
-                    f"cmux send-key --workspace {cmux_handle} Enter"
+            if post_launch_prompt and is_codex_command(normalized_command):
+                _dismiss_codex_update_prompt_if_present(
+                    cmux_handle,
+                    normalized_command,
+                    timeout_seconds=pane_ready_timeout,
+                    poll_interval_seconds=0.2,
                 )
-        elif (
-            prompt
-            and not is_codex_command(normalized_command)
-            and not is_nanobot_command(normalized_command)
-            and not is_gemini_command(normalized_command)
-            and not is_kimi_command(normalized_command)
-            and not is_qwen_command(normalized_command)
-            and not is_opencode_command(normalized_command)
-        ):
-            ready = _wait_for_cli_ready(
-                cmux_handle,
-                timeout_seconds=cfg.spawn_ready_timeout,
-                fallback_delay=cfg.spawn_prompt_delay,
-            )
-            if not _inject_prompt_via_keys(cmux_handle, prompt):
-                return (
-                    f"Warning: Agent '{agent_name}' workspace created but prompt injection failed. "
-                    f"CLI {'was' if ready else 'was NOT'} ready. "
-                    f"Send prompt manually: cmux send --workspace {cmux_handle} '<prompt>' && "
-                    f"cmux send-key --workspace {cmux_handle} Enter"
+
+            if post_launch_prompt:
+                ready = _wait_for_cli_ready(
+                    cmux_handle,
+                    timeout_seconds=cfg.spawn_ready_timeout,
+                    fallback_delay=cfg.spawn_prompt_delay,
                 )
+                if not _inject_prompt_via_keys(cmux_handle, post_launch_prompt):
+                    return (
+                        f"Warning: Agent '{agent_name}' workspace created but prompt injection failed. "
+                        f"CLI {'was' if ready else 'was NOT'} ready. "
+                        f"Send prompt manually: cmux send --workspace {cmux_handle} '<prompt>' && "
+                        f"cmux send-key --workspace {cmux_handle} Enter"
+                    )
+            elif (
+                prompt
+                and not is_codex_command(normalized_command)
+                and not is_nanobot_command(normalized_command)
+                and not is_gemini_command(normalized_command)
+                and not is_kimi_command(normalized_command)
+                and not is_qwen_command(normalized_command)
+                and not is_opencode_command(normalized_command)
+            ):
+                ready = _wait_for_cli_ready(
+                    cmux_handle,
+                    timeout_seconds=cfg.spawn_ready_timeout,
+                    fallback_delay=cfg.spawn_prompt_delay,
+                )
+                if not _inject_prompt_via_keys(cmux_handle, prompt):
+                    return (
+                        f"Warning: Agent '{agent_name}' workspace created but prompt injection failed. "
+                        f"CLI {'was' if ready else 'was NOT'} ready. "
+                        f"Send prompt manually: cmux send --workspace {cmux_handle} '<prompt>' && "
+                        f"cmux send-key --workspace {cmux_handle} Enter"
+                    )
 
         self._agents[agent_name] = cmux_handle
 
@@ -324,6 +369,8 @@ class CmuxBackend(SpawnBackend):
             command=list(final_command),
         )
 
+        if spawned_as_surface:
+            return f"Agent '{agent_name}' spawned as tab in workspace '{parent_workspace}'"
         return f"Agent '{agent_name}' spawned in cmux workspace '{workspace_name}'"
 
     def list_running(self) -> list[dict[str, str]]:
