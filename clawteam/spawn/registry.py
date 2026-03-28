@@ -69,6 +69,8 @@ def is_agent_alive(team_name: str, agent_name: str) -> bool | None:
             if pid:
                 return _pid_alive(pid)
         return alive
+    elif backend == "cmux":
+        return _cmux_workspace_alive(info.get("tmux_target", ""))
     elif backend == "subprocess":
         return _pid_alive(info.get("pid", 0))
     return None
@@ -135,6 +137,14 @@ def stop_agent(team_name: str, agent_name: str, timeout_seconds: float = 3.0) ->
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
+    elif backend == "cmux":
+        workspace = info.get("tmux_target", "")
+        if workspace:
+            subprocess.run(
+                ["/opt/homebrew/bin/cmux", "close-workspace", "--workspace", workspace],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
     elif backend == "subprocess":
         pid = info.get("pid", 0)
         if pid:
@@ -177,6 +187,31 @@ def _tmux_pane_alive(target: str) -> bool:
         if len(parts) >= 2 and parts[1] in ("bash", "zsh", "sh", "fish"):
             return False
     return True
+
+
+def _cmux_workspace_alive(workspace_name: str) -> bool:
+    """Check if a cmux workspace still exists."""
+    if not workspace_name:
+        return False
+    try:
+        result = subprocess.run(
+            ["/opt/homebrew/bin/cmux", "list-workspaces"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+    if result.returncode != 0:
+        return False
+    for line in result.stdout.strip().splitlines():
+        parts = line.strip().split()
+        for i, part in enumerate(parts):
+            if part.startswith("workspace:") and i + 1 < len(parts):
+                if parts[i + 1] == workspace_name:
+                    return True
+                break
+    return False
 
 
 def _pid_alive(pid: int) -> bool:
