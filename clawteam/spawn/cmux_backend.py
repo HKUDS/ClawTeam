@@ -315,8 +315,7 @@ class CmuxBackend(SpawnBackend):
         ws_name = f"{team_name}-{agent_name}"
         # Clear sidebar badges on exit (prevents stale pill accumulation)
         badge_cleanup = (
-            f"{shlex.quote(_CMUX_BIN)} clear-status agent 2>/dev/null; "
-            f"{shlex.quote(_CMUX_BIN)} clear-status task 2>/dev/null"
+            f"{shlex.quote(_CMUX_BIN)} clear-status agent 2>/dev/null"
         )
         cmux_cleanup = (
             f"{badge_cleanup}; "
@@ -437,28 +436,17 @@ class CmuxBackend(SpawnBackend):
                     [_CMUX_BIN, "clear-status", "agent", "--workspace", badge_target],
                     capture_output=True, text=True, timeout=3,
                 )
-                subprocess.run(
-                    [_CMUX_BIN, "clear-status", "task", "--workspace", badge_target],
-                    capture_output=True, text=True, timeout=3,
-                )
             except (subprocess.TimeoutExpired, OSError):
                 pass
             try:
                 is_sidequest = team_name.startswith("sq") or team_name.startswith("sidequest")
-                team_type = "side-quest" if is_sidequest else "build"
                 icon = "magnifyingglass" if is_sidequest else "hammer"
                 color = "#007aff" if is_sidequest else "#ff9500"
-                # Show type + team number as the badge (e.g. "🔍 sidequest-3" or "🔨 build")
-                subprocess.run(
-                    [_CMUX_BIN, "set-status", "agent", team_type,
-                     "--icon", icon, "--color", color, "--workspace", badge_target],
-                    capture_output=True, text=True, timeout=5,
-                )
-                # Show agent task name (truncated to 60 chars)
+                # One badge: icon shows type, text shows what it's doing
                 short_name = agent_name[:60]
                 subprocess.run(
-                    [_CMUX_BIN, "set-status", "task", short_name,
-                     "--icon", "sparkle", "--workspace", badge_target],
+                    [_CMUX_BIN, "set-status", "agent", short_name,
+                     "--icon", icon, "--color", color, "--workspace", badge_target],
                     capture_output=True, text=True, timeout=5,
                 )
             except (subprocess.TimeoutExpired, OSError):
