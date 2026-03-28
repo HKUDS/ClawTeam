@@ -426,16 +426,20 @@ class CmuxBackend(SpawnBackend):
         badge_target = parent_workspace if is_surface else cmux_handle
         if badge_target:
             try:
-                team_type = "side-quest" if team_name.startswith("sq-") else "build"
-                icon = "magnifier" if team_type == "side-quest" else "hammer"
-                color = "#007aff" if team_type == "side-quest" else "#ff9500"
+                is_sidequest = team_name.startswith("sq") or team_name.startswith("sidequest")
+                team_type = "side-quest" if is_sidequest else "build"
+                icon = "magnifyingglass" if is_sidequest else "hammer"
+                color = "#007aff" if is_sidequest else "#ff9500"
+                # Show type + team number as the badge (e.g. "🔍 sidequest-3" or "🔨 build")
                 subprocess.run(
-                    [_CMUX_BIN, "set-status", "team", team_name,
+                    [_CMUX_BIN, "set-status", "agent", team_type,
                      "--icon", icon, "--color", color, "--workspace", badge_target],
                     capture_output=True, text=True, timeout=5,
                 )
+                # Show short agent name (truncated to 20 chars)
+                short_name = agent_name[:20]
                 subprocess.run(
-                    [_CMUX_BIN, "set-status", "role", agent_name,
+                    [_CMUX_BIN, "set-status", "worker", short_name,
                      "--icon", "sparkle", "--workspace", badge_target],
                     capture_output=True, text=True, timeout=5,
                 )
