@@ -208,17 +208,18 @@ class CmuxBackend(SpawnBackend):
         if match:
             workspace_ref = match.group(1)
 
-        # Rename workspace to team-agent format
+        # Rename workspace to team-agent format (display name only)
         if workspace_ref:
-            rename_result = subprocess.run(
+            subprocess.run(
                 [_CMUX_BIN, "rename-workspace", "--workspace", workspace_ref, workspace_name],
                 capture_output=True,
                 text=True,
                 timeout=5,
             )
-            if rename_result.returncode != 0:
-                # Fall back to using the raw ref for subsequent operations
-                workspace_name = workspace_ref
+        # IMPORTANT: Use workspace_ref for ALL subsequent cmux operations.
+        # cmux commands require refs (workspace:N), not display names.
+        # workspace_name is only for display/rename purposes.
+        cmux_handle = workspace_ref or workspace_name
 
         # Restore focus to previous workspace to avoid focus steal
         if previous_workspace:
@@ -245,14 +246,14 @@ class CmuxBackend(SpawnBackend):
             )
 
         _confirm_workspace_trust_if_prompted(
-            workspace_name,
+            cmux_handle,
             normalized_command,
             timeout_seconds=cfg.spawn_ready_timeout,
         )
 
         if post_launch_prompt and is_codex_command(normalized_command):
             _dismiss_codex_update_prompt_if_present(
-                workspace_name,
+                cmux_handle,
                 normalized_command,
                 timeout_seconds=pane_ready_timeout,
                 poll_interval_seconds=0.2,
@@ -260,16 +261,16 @@ class CmuxBackend(SpawnBackend):
 
         if post_launch_prompt:
             ready = _wait_for_cli_ready(
-                workspace_name,
+                cmux_handle,
                 timeout_seconds=cfg.spawn_ready_timeout,
                 fallback_delay=cfg.spawn_prompt_delay,
             )
-            if not _inject_prompt_via_keys(workspace_name, post_launch_prompt):
+            if not _inject_prompt_via_keys(cmux_handle, post_launch_prompt):
                 return (
                     f"Warning: Agent '{agent_name}' workspace created but prompt injection failed. "
                     f"CLI {'was' if ready else 'was NOT'} ready. "
-                    f"Send prompt manually: cmux send --workspace {workspace_name} '<prompt>' && "
-                    f"cmux send-key --workspace {workspace_name} Enter"
+                    f"Send prompt manually: cmux send --workspace {cmux_handle} '<prompt>' && "
+                    f"cmux send-key --workspace {cmux_handle} Enter"
                 )
         elif (
             prompt
@@ -281,19 +282,19 @@ class CmuxBackend(SpawnBackend):
             and not is_opencode_command(normalized_command)
         ):
             ready = _wait_for_cli_ready(
-                workspace_name,
+                cmux_handle,
                 timeout_seconds=cfg.spawn_ready_timeout,
                 fallback_delay=cfg.spawn_prompt_delay,
             )
-            if not _inject_prompt_via_keys(workspace_name, prompt):
+            if not _inject_prompt_via_keys(cmux_handle, prompt):
                 return (
                     f"Warning: Agent '{agent_name}' workspace created but prompt injection failed. "
                     f"CLI {'was' if ready else 'was NOT'} ready. "
-                    f"Send prompt manually: cmux send --workspace {workspace_name} '<prompt>' && "
-                    f"cmux send-key --workspace {workspace_name} Enter"
+                    f"Send prompt manually: cmux send --workspace {cmux_handle} '<prompt>' && "
+                    f"cmux send-key --workspace {cmux_handle} Enter"
                 )
 
-        self._agents[agent_name] = workspace_name
+        self._agents[agent_name] = cmux_handle
 
         # Persist spawn info for liveness checking
         from clawteam.spawn.registry import register_agent
@@ -495,6 +496,9 @@ def _wait_for_cli_ready(
             if line.startswith(("\u276f", ">", "\u203a")):
                 return True
             if "Try " in line and "write a test" in line:
+                return True
+            # Claude Code in cmux shows "-- INSERT --" in the status bar when ready
+            if "-- INSERT --" in line:
                 return True
 
         if text == last_content and lines:
