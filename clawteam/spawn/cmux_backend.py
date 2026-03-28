@@ -1,5 +1,5 @@
 """Cmux spawn backend - launches agents in cmux workspaces for visual monitoring."""
-# cmux backend v0.3.0 — send/send-key prompt injection, auto-close, exact workspace matching
+# cmux backend v0.4.0 — unified launcher + helpers, PYTHONDONTWRITEBYTECODE
 
 from __future__ import annotations
 
@@ -58,7 +58,6 @@ def _cmux_workspace_exists(name: str) -> bool:
     if result.returncode != 0:
         return False
     for line in result.stdout.strip().splitlines():
-        # Parse workspace name from line: "  workspace:N  name  [selected]"
         parts = line.strip().split()
         for i, part in enumerate(parts):
             if part.startswith("workspace:") and i + 1 < len(parts):
@@ -83,6 +82,142 @@ def _cmux_get_current_workspace() -> str | None:
     if result.returncode == 0 and result.stdout.strip():
         return result.stdout.strip()
     return None
+
+
+# ---------------------------------------------------------------------------
+# Unified helpers — parameterized by is_surface to serve both workspace and
+# surface (tab) code paths.  Replaces the former _read_workspace_screen,
+# _wait_for_cli_ready / _wait_for_surface_ready, and
+# _inject_prompt_via_keys / _inject_prompt_via_surface duplicates.
+# ---------------------------------------------------------------------------
+
+
+def _read_screen(handle: str, is_surface: bool = False) -> str:
+    """Read the current screen content of a cmux workspace or surface."""
+    flag = "--surface" if is_surface else "--workspace"
+    try:
+        result = subprocess.run(
+            [_CMUX_BIN, "read-screen", flag, handle],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return ""
+    if result.returncode == 0:
+        return result.stdout
+    return ""
+
+
+def _wait_for_ready(
+    handle: str,
+    is_surface: bool = False,
+    timeout_seconds: float = 30.0,
+    fallback_delay: float = 2.0,
+    poll_interval: float = 1.0,
+) -> bool:
+    """Poll cmux workspace/surface until an interactive CLI shows an input prompt.
+
+    Uses prompt indicators and content stabilisation.
+    Returns True when ready, False on timeout.
+    """
+    deadline = time.monotonic() + timeout_seconds
+    last_content = ""
+    stable_count = 0
+
+    while time.monotonic() < deadline:
+        text = _read_screen(handle, is_surface)
+        if not text:
+            time.sleep(poll_interval)
+            continue
+
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        tail = lines[-10:] if len(lines) >= 10 else lines
+
+        for line in tail:
+            if line.startswith(("\u276f", ">", "\u203a")):
+                return True
+            if "Try " in line and "write a test" in line:
+                return True
+            if "-- INSERT --" in line:
+                return True
+
+        if text == last_content and lines:
+            stable_count += 1
+            if stable_count >= 2:
+                return True
+        else:
+            stable_count = 0
+            last_content = text
+
+        time.sleep(poll_interval)
+    time.sleep(fallback_delay)
+    return False
+
+
+def _inject_prompt(handle: str, prompt: str, is_surface: bool = False) -> bool:
+    """Inject a prompt into a cmux workspace/surface via send + send-key.
+
+    Writes prompt to a temp file first to handle multiline/special chars.
+    On Enter failure, falls back to sending a literal ``\\n`` (was surface-only,
+    now unified for both modes).
+    """
+    flag = "--surface" if is_surface else "--workspace"
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+        f.write(prompt)
+        prompt_file = f.name
+
+    try:
+        with open(prompt_file) as f:
+            prompt_text = f.read()
+
+        result = subprocess.run(
+            [_CMUX_BIN, "send", flag, handle, prompt_text],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            return False
+
+        time.sleep(0.5)
+
+        result = subprocess.run(
+            [_CMUX_BIN, "send-key", flag, handle, "Enter"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode != 0:
+            # Fallback: try literal \n via send
+            subprocess.run(
+                [_CMUX_BIN, "send", flag, handle, "\\n"],
+                capture_output=True, text=True, timeout=5,
+            )
+        return True
+    finally:
+        os.unlink(prompt_file)
+
+
+# ---------------------------------------------------------------------------
+# Launcher builder — both surface and workspace modes write the same
+# self-deleting script so there is one place to set PYTHONDONTWRITEBYTECODE
+# and one cleanup pattern.
+# ---------------------------------------------------------------------------
+
+
+def _prepare_launcher(full_cmd: str) -> str:
+    """Write a self-deleting launcher script and return its path.
+
+    The script:
+    1. Exports PYTHONDONTWRITEBYTECODE=1 (prevents .pyc staleness)
+    2. Schedules its own deletion after 5 s (belt-and-suspenders cleanup)
+    3. Runs the full agent command chain
+    """
+    fd, path = tempfile.mkstemp(prefix="agent-launch-", suffix=".sh")
+    with os.fdopen(fd, "w") as f:
+        f.write("#!/usr/bin/env bash\n")
+        f.write("export PYTHONDONTWRITEBYTECODE=1\n")
+        f.write('_self="$0"; ( sleep 5; rm -f "$_self" ) &\n')
+        f.write(full_cmd + "\n")
+    os.chmod(path, 0o700)
+    return path
 
 
 class CmuxBackend(SpawnBackend):
@@ -161,7 +296,6 @@ class CmuxBackend(SpawnBackend):
 
         # Write env to temp file to avoid exposing secrets in terminal scrollback.
         # The file is sourced then deleted — secrets never appear in the command line.
-        import tempfile
         export_vars = {k: v for k, v in env_vars.items() if _SHELL_ENV_KEY_RE.fullmatch(k)}
         env_fd, env_path = tempfile.mkstemp(prefix="clawteam-env-", suffix=".sh")
         with os.fdopen(env_fd, "w") as f:
@@ -190,13 +324,16 @@ class CmuxBackend(SpawnBackend):
         else:
             full_cmd = f"{unset_clause}{env_source}; {cmd_str}; {exit_hook}; {cmux_cleanup}"
 
+        # Unified launcher script for both modes (G1, G4)
+        launcher_path = _prepare_launcher(full_cmd)
+
         # Remember current workspace to restore focus after spawn
         previous_workspace = _cmux_get_current_workspace()
 
         work_dir = cwd or os.getcwd()
-        spawned_as_surface = False
+        is_surface = bool(parent_workspace)
 
-        if parent_workspace:
+        if is_surface:
             # --- Surface mode: spawn as a tab inside the parent workspace ---
             try:
                 launch = subprocess.run(
@@ -206,9 +343,11 @@ class CmuxBackend(SpawnBackend):
                     timeout=30,
                 )
             except subprocess.TimeoutExpired:
+                os.unlink(launcher_path)
                 return "Error: cmux new-surface timed out after 30s"
 
             if launch.returncode != 0:
+                os.unlink(launcher_path)
                 stderr = launch.stderr.strip() if launch.stderr else ""
                 return f"Error: failed to create cmux surface: {stderr}"
 
@@ -220,6 +359,7 @@ class CmuxBackend(SpawnBackend):
                 surface_ref = m.group(1)
 
             if not surface_ref:
+                os.unlink(launcher_path)
                 return f"Error: could not parse surface ref from cmux output: {stdout}"
 
             # Rename tab for identification
@@ -228,50 +368,29 @@ class CmuxBackend(SpawnBackend):
                 capture_output=True, text=True, timeout=5,
             )
 
-            # Write command to temp script — cmux send chokes on long commands.
-            # Script self-deletes after sourcing so env vars land in the shell.
-            script = tempfile.NamedTemporaryFile(
-                mode="w", prefix="clawteam-surface-", suffix=".sh", delete=False,
-            )
-            script.write("#!/usr/bin/env bash\n")
-            script.write(f"rm -f {shlex.quote(script.name)}\n")
-            script.write(full_cmd + "\n")
-            script.close()
-            os.chmod(script.name, 0o700)
-
+            # Source the launcher so env vars land in the shell process
             subprocess.run(
-                [_CMUX_BIN, "send", "--surface", surface_ref, "--", f"source {shlex.quote(script.name)}\n"],
+                [_CMUX_BIN, "send", "--surface", surface_ref, "--", f"source {shlex.quote(launcher_path)}\n"],
                 capture_output=True, text=True, timeout=10,
             )
 
             cmux_handle = surface_ref
-            spawned_as_surface = True
-
-            # Wait for CLI readiness, then inject prompt (same as workspace mode)
-            if prompt or post_launch_prompt:
-                from clawteam.config import load_config
-                cfg = load_config()
-                _wait_for_surface_ready(
-                    surface_ref,
-                    timeout_seconds=cfg.spawn_ready_timeout,
-                    fallback_delay=cfg.spawn_prompt_delay,
-                )
-                inject_text = post_launch_prompt or prompt or ""
-                if inject_text:
-                    _inject_prompt_via_surface(surface_ref, inject_text)
         else:
             # --- Workspace mode: each agent gets its own sidebar workspace ---
             try:
                 launch = subprocess.run(
-                    [_CMUX_BIN, "new-workspace", "--cwd", work_dir, "--command", full_cmd],
+                    [_CMUX_BIN, "new-workspace", "--cwd", work_dir,
+                     "--command", f"bash {shlex.quote(launcher_path)}"],
                     capture_output=True,
                     text=True,
                     timeout=30,
                 )
             except subprocess.TimeoutExpired:
+                os.unlink(launcher_path)
                 return "Error: cmux new-workspace timed out after 30s"
 
             if launch.returncode != 0:
+                os.unlink(launcher_path)
                 stderr = launch.stderr.strip() if launch.stderr else ""
                 return f"Error: failed to launch cmux workspace: {stderr}"
 
@@ -293,7 +412,12 @@ class CmuxBackend(SpawnBackend):
             # IMPORTANT: Use workspace_ref for ALL subsequent cmux operations.
             cmux_handle = workspace_ref or workspace_name
 
-        if not spawned_as_surface:
+        # Load config for readiness timeouts (both modes need this)
+        from clawteam.config import load_config
+        cfg = load_config()
+
+        # --- Workspace-only post-spawn: badge, focus restore, visibility ---
+        if not is_surface:
             # Set team badge in sidebar (cosmetic — failure must not block spawn)
             try:
                 team_type = "side-quest" if team_name.startswith("sq-") else "build"
@@ -312,21 +436,15 @@ class CmuxBackend(SpawnBackend):
             except (subprocess.TimeoutExpired, OSError):
                 pass  # badge failure is cosmetic, don't block spawn
 
-        # Restore focus to previous workspace to avoid focus steal
-        if previous_workspace and not spawned_as_surface:
-            subprocess.run(
-                [_CMUX_BIN, "select-workspace", "--workspace", previous_workspace],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
+            # Restore focus to previous workspace to avoid focus steal
+            if previous_workspace:
+                subprocess.run(
+                    [_CMUX_BIN, "select-workspace", "--workspace", previous_workspace],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
 
-        # Surface mode: command already sent via cmux send, skip readiness/prompt injection.
-        # Workspace mode: wait for workspace to appear, then inject prompt if needed.
-        if not spawned_as_surface:
-            from clawteam.config import load_config
-
-            cfg = load_config()
             pane_ready_timeout = min(cfg.spawn_ready_timeout, max(15.0, cfg.spawn_prompt_delay + 2.0))
             if not _wait_for_cmux_workspace(
                 workspace_name,
@@ -353,40 +471,36 @@ class CmuxBackend(SpawnBackend):
                     poll_interval_seconds=0.2,
                 )
 
-            if post_launch_prompt:
-                ready = _wait_for_cli_ready(
-                    cmux_handle,
-                    timeout_seconds=cfg.spawn_ready_timeout,
-                    fallback_delay=cfg.spawn_prompt_delay,
-                )
-                if not _inject_prompt_via_keys(cmux_handle, post_launch_prompt):
-                    return (
-                        f"Warning: Agent '{agent_name}' workspace created but prompt injection failed. "
-                        f"CLI {'was' if ready else 'was NOT'} ready. "
-                        f"Send prompt manually: cmux send --workspace {cmux_handle} '<prompt>' && "
-                        f"cmux send-key --workspace {cmux_handle} Enter"
-                    )
-            elif (
-                prompt
-                and not is_codex_command(normalized_command)
-                and not is_nanobot_command(normalized_command)
-                and not is_gemini_command(normalized_command)
-                and not is_kimi_command(normalized_command)
-                and not is_qwen_command(normalized_command)
-                and not is_opencode_command(normalized_command)
+        # --- Unified readiness + prompt injection (G2, G3) ---
+        inject_text = post_launch_prompt
+        if not inject_text and prompt:
+            # Only inject raw prompt for CLIs that don't embed it in the command
+            if not (
+                is_codex_command(normalized_command)
+                or is_nanobot_command(normalized_command)
+                or is_gemini_command(normalized_command)
+                or is_kimi_command(normalized_command)
+                or is_qwen_command(normalized_command)
+                or is_opencode_command(normalized_command)
             ):
-                ready = _wait_for_cli_ready(
-                    cmux_handle,
-                    timeout_seconds=cfg.spawn_ready_timeout,
-                    fallback_delay=cfg.spawn_prompt_delay,
+                inject_text = prompt
+
+        if inject_text:
+            ready = _wait_for_ready(
+                cmux_handle,
+                is_surface=is_surface,
+                timeout_seconds=cfg.spawn_ready_timeout,
+                fallback_delay=cfg.spawn_prompt_delay,
+            )
+            if not _inject_prompt(cmux_handle, inject_text, is_surface):
+                flag_name = "--surface" if is_surface else "--workspace"
+                return (
+                    f"Warning: Agent '{agent_name}' {'surface' if is_surface else 'workspace'} "
+                    f"created but prompt injection failed. "
+                    f"CLI {'was' if ready else 'was NOT'} ready. "
+                    f"Send prompt manually: cmux send {flag_name} {cmux_handle} '<prompt>' && "
+                    f"cmux send-key {flag_name} {cmux_handle} Enter"
                 )
-                if not _inject_prompt_via_keys(cmux_handle, prompt):
-                    return (
-                        f"Warning: Agent '{agent_name}' workspace created but prompt injection failed. "
-                        f"CLI {'was' if ready else 'was NOT'} ready. "
-                        f"Send prompt manually: cmux send --workspace {cmux_handle} '<prompt>' && "
-                        f"cmux send-key --workspace {cmux_handle} Enter"
-                    )
 
         self._agents[agent_name] = cmux_handle
 
@@ -401,7 +515,7 @@ class CmuxBackend(SpawnBackend):
             command=list(final_command),
         )
 
-        if spawned_as_surface:
+        if is_surface:
             return f"Agent '{agent_name}' spawned as tab in workspace '{parent_workspace}'"
         return f"Agent '{agent_name}' spawned in cmux workspace '{workspace_name}'"
 
@@ -426,22 +540,6 @@ def _wait_for_cmux_workspace(
     return False
 
 
-def _read_workspace_screen(workspace_name: str) -> str:
-    """Read the current screen content of a cmux workspace."""
-    try:
-        result = subprocess.run(
-            [_CMUX_BIN, "read-screen", "--workspace", workspace_name],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-    except (subprocess.TimeoutExpired, OSError):
-        return ""
-    if result.returncode == 0:
-        return result.stdout
-    return ""
-
-
 def _confirm_workspace_trust_if_prompted(
     workspace_name: str,
     command: list[str],
@@ -458,7 +556,7 @@ def _confirm_workspace_trust_if_prompted(
 
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
-        screen_text = _read_workspace_screen(workspace_name).lower()
+        screen_text = _read_screen(workspace_name).lower()
         action = _startup_prompt_action(command, screen_text)
         if action == "enter":
             subprocess.run(
@@ -548,7 +646,7 @@ def _dismiss_codex_update_prompt_if_present(
 
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
-        screen_text = _read_workspace_screen(workspace_name).lower()
+        screen_text = _read_screen(workspace_name).lower()
         if _looks_like_codex_update_prompt(screen_text):
             subprocess.run(
                 [_CMUX_BIN, "send-key", "--workspace", workspace_name, "Enter"],
@@ -562,174 +660,3 @@ def _dismiss_codex_update_prompt_if_present(
 
         time.sleep(poll_interval_seconds)
     return False
-
-
-def _wait_for_cli_ready(
-    workspace_name: str,
-    timeout_seconds: float = 30.0,
-    fallback_delay: float = 2.0,
-    poll_interval: float = 1.0,
-) -> bool:
-    """Poll cmux workspace until an interactive CLI shows an input prompt.
-
-    Uses prompt indicators and content stabilization, same heuristics as tmux backend.
-    Returns True when ready, False on timeout.
-    """
-    deadline = time.monotonic() + timeout_seconds
-    last_content = ""
-    stable_count = 0
-
-    while time.monotonic() < deadline:
-        text = _read_workspace_screen(workspace_name)
-        if not text:
-            time.sleep(poll_interval)
-            continue
-
-        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-        tail = lines[-10:] if len(lines) >= 10 else lines
-
-        for line in tail:
-            if line.startswith(("\u276f", ">", "\u203a")):
-                return True
-            if "Try " in line and "write a test" in line:
-                return True
-            # Claude Code in cmux shows "-- INSERT --" in the status bar when ready
-            if "-- INSERT --" in line:
-                return True
-
-        if text == last_content and lines:
-            stable_count += 1
-            if stable_count >= 2:
-                return True
-        else:
-            stable_count = 0
-            last_content = text
-
-        time.sleep(poll_interval)
-    time.sleep(fallback_delay)
-    return False
-
-
-def _inject_prompt_via_keys(workspace_name: str, prompt: str) -> bool:
-    """Inject a prompt into a cmux workspace via send + send-key.
-
-    Uses `cmux send` for text (types into terminal) and `cmux send-key Enter`
-    to submit. Returns True if all commands succeeded.
-    """
-    # Write prompt text via temp file to handle multiline/special chars safely
-    import tempfile
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-        f.write(prompt)
-        prompt_file = f.name
-
-    try:
-        # Read prompt from file and send via cmux send
-        with open(prompt_file) as f:
-            prompt_text = f.read()
-
-        result = subprocess.run(
-            [_CMUX_BIN, "send", "--workspace", workspace_name, prompt_text],
-            capture_output=True, text=True, timeout=10,
-        )
-        if result.returncode != 0:
-            return False
-
-        time.sleep(0.5)
-
-        # Press Enter to submit
-        result = subprocess.run(
-            [_CMUX_BIN, "send-key", "--workspace", workspace_name, "Enter"],
-            capture_output=True, text=True, timeout=5,
-        )
-        if result.returncode != 0:
-            return False
-
-        return True
-    finally:
-        import os
-        os.unlink(prompt_file)
-
-
-def _wait_for_surface_ready(
-    surface_ref: str,
-    timeout_seconds: float = 30.0,
-    fallback_delay: float = 2.0,
-    poll_interval: float = 1.0,
-) -> bool:
-    """Poll cmux surface until CLI shows an input prompt."""
-    deadline = time.monotonic() + timeout_seconds
-    last_content = ""
-    stable_count = 0
-
-    while time.monotonic() < deadline:
-        try:
-            result = subprocess.run(
-                [_CMUX_BIN, "read-screen", "--surface", surface_ref],
-                capture_output=True, text=True, timeout=5,
-            )
-            text = result.stdout if result.returncode == 0 else ""
-        except (subprocess.TimeoutExpired, OSError):
-            text = ""
-
-        if not text:
-            time.sleep(poll_interval)
-            continue
-
-        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-        tail = lines[-10:] if len(lines) >= 10 else lines
-
-        for line in tail:
-            if line.startswith(("\u276f", ">", "\u203a")):
-                return True
-            if "Try " in line and "write a test" in line:
-                return True
-            if "-- INSERT --" in line:
-                return True
-
-        if text == last_content and lines:
-            stable_count += 1
-            if stable_count >= 2:
-                return True
-        else:
-            stable_count = 0
-            last_content = text
-
-        time.sleep(poll_interval)
-    time.sleep(fallback_delay)
-    return False
-
-
-def _inject_prompt_via_surface(surface_ref: str, prompt: str) -> bool:
-    """Inject a prompt into a cmux surface via send + send-key Enter."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-        f.write(prompt)
-        prompt_file = f.name
-
-    try:
-        with open(prompt_file) as f:
-            prompt_text = f.read()
-
-        # Send prompt text
-        result = subprocess.run(
-            [_CMUX_BIN, "send", "--surface", surface_ref, prompt_text],
-            capture_output=True, text=True, timeout=10,
-        )
-        if result.returncode != 0:
-            return False
-
-        time.sleep(0.5)
-
-        # Submit with Enter via send-key
-        result = subprocess.run(
-            [_CMUX_BIN, "send-key", "--surface", surface_ref, "Enter"],
-            capture_output=True, text=True, timeout=5,
-        )
-        if result.returncode != 0:
-            # Fallback: try \n in send text
-            subprocess.run(
-                [_CMUX_BIN, "send", "--surface", surface_ref, "\\n"],
-                capture_output=True, text=True, timeout=5,
-            )
-        return True
-    finally:
-        os.unlink(prompt_file)
