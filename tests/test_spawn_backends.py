@@ -7,6 +7,9 @@ import sys
 
 from clawteam.spawn.cli_env import build_spawn_path, resolve_clawteam_executable
 from clawteam.spawn.subprocess_backend import SubprocessBackend
+from clawteam.spawn.cmux_backend import (
+    _confirm_trust_if_prompted,
+)
 from clawteam.spawn.tmux_backend import (
     TmuxBackend,
     _confirm_workspace_trust_if_prompted,
@@ -1347,3 +1350,46 @@ def test_load_skill_content_returns_none_for_missing(tmp_path, monkeypatch):
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
 
     assert _load_skill_content("nonexistent") is None
+
+
+def test_cmux_confirm_trust_uses_surface_flag(monkeypatch):
+    run_calls: list[list[str]] = []
+    capture_count = 0
+
+    class Result:
+        def __init__(self, returncode: int = 0, stdout: str = ""):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = ""
+
+    def fake_run(args, **kwargs):
+        nonlocal capture_count
+        run_calls.append(args)
+        if "read-screen" in args:
+            capture_count += 1
+            if capture_count == 1:
+                return Result(
+                    stdout=(
+                        "Quick safety check\n"
+                        "Yes, I trust this folder\n"
+                        "Enter to confirm\n"
+                    )
+                )
+            return Result(stdout="")
+        return Result()
+
+    monkeypatch.setattr("clawteam.spawn.cmux_backend.subprocess.run", fake_run)
+    monkeypatch.setattr("clawteam.spawn.cmux_backend.time.sleep", lambda *_: None)
+    monkeypatch.setattr("clawteam.spawn.cmux_backend.time.monotonic", iter(range(100)).__next__)
+
+    confirmed = _confirm_trust_if_prompted(
+        handle="test-surface",
+        command=["claude"],
+        is_surface=True,
+        timeout_seconds=2.0,
+    )
+
+    assert confirmed is True
+    send_key_calls = [c for c in run_calls if "send-key" in c]
+    assert any("--surface" in c and "test-surface" in c for c in send_key_calls)
+    assert not any("--workspace" in c for c in send_key_calls)

@@ -1,0 +1,194 @@
+{
+  "testModules": [
+    {
+      "moduleId": "tests/test_spawn_backends.py",
+      "tests": [
+        {
+          "name": "test_subprocess_backend_prepends_current_clawteam_bin_to_path",
+          "fullName": "tests/test_spawn_backends.py::test_subprocess_backend_prepends_current_clawteam_bin_to_path",
+          "state": "passed"
+        },
+        {
+          "name": "test_subprocess_backend_discards_output_and_preserves_exit_hook_and_registry",
+          "fullName": "tests/test_spawn_backends.py::test_subprocess_backend_discards_output_and_preserves_exit_hook_and_registry",
+          "state": "passed"
+        },
+        {
+          "name": "test_tmux_backend_exports_spawn_path_for_agent_commands",
+          "fullName": "tests/test_spawn_backends.py::test_tmux_backend_exports_spawn_path_for_agent_commands",
+          "state": "passed"
+        },
+        {
+          "name": "test_tmux_backend_uses_configured_timeout_for_workspace_trust_prompt",
+          "fullName": "tests/test_spawn_backends.py::test_tmux_backend_uses_configured_timeout_for_workspace_trust_prompt",
+          "state": "passed"
+        },
+        {
+          "name": "test_tmux_backend_returns_error_when_command_missing",
+          "fullName": "tests/test_spawn_backends.py::test_tmux_backend_returns_error_when_command_missing",
+          "state": "passed"
+        },
+        {
+          "name": "test_subprocess_backend_returns_error_when_command_missing",
+          "fullName": "tests/test_spawn_backends.py::test_subprocess_backend_returns_error_when_command_missing",
+          "state": "passed"
+        },
+        {
+          "name": "test_tmux_backend_normalizes_bare_nanobot_to_agent",
+          "fullName": "tests/test_spawn_backends.py::test_tmux_backend_normalizes_bare_nanobot_to_agent",
+          "state": "passed"
+        },
+        {
+          "name": "test_tmux_backend_confirms_claude_workspace_trust_prompt",
+          "fullName": "tests/test_spawn_backends.py::test_tmux_backend_confirms_claude_workspace_trust_prompt",
+          "state": "passed"
+        },
+        {
+          "name": "test_tmux_backend_confirms_claude_skip_permissions_prompt",
+          "fullName": "tests/test_spawn_backends.py::test_tmux_backend_confirms_claude_skip_permissions_prompt",
+          "state": "passed"
+        },
+        {
+          "name": "test_tmux_backend_confirms_codex_workspace_trust_prompt",
+          "fullName": "tests/test_spawn_backends.py::test_tmux_backend_confirms_codex_workspace_trust_prompt",
+          "state": "passed"
+        },
+        {
+          "name": "test_tmux_backend_waits_for_pane_before_declaring_failure",
+          "fullName": "tests/test_spawn_backends.py::test_tmux_backend_waits_for_pane_before_declaring_failure",
+          "state": "passed"
+        },
+        {
+          "name": "test_dismiss_codex_update_prompt_sends_enter",
+          "fullName": "tests/test_spawn_backends.py::test_dismiss_codex_update_prompt_sends_enter",
+          "state": "passed"
+        },
+        {
+          "name": "test_subprocess_backend_normalizes_nanobot_and_uses_message_flag",
+          "fullName": "tests/test_spawn_backends.py::test_subprocess_backend_normalizes_nanobot_and_uses_message_flag",
+          "state": "passed"
+        },
+        {
+          "name": "test_tmux_backend_gemini_skip_permissions_and_prompt",
+          "fullName": "tests/test_spawn_backends.py::test_tmux_backend_gemini_skip_permissions_and_prompt",
+          "state": "passed"
+        },
+        {
+          "name": "test_subprocess_backend_gemini_skip_permissions_and_prompt",
+          "fullName": "tests/test_spawn_backends.py::test_subprocess_backend_gemini_skip_permissions_and_prompt",
+          "state": "passed"
+        },
+        {
+          "name": "test_tmux_backend_confirms_gemini_workspace_trust_prompt",
+          "fullName": "tests/test_spawn_backends.py::test_tmux_backend_confirms_gemini_workspace_trust_prompt",
+          "state": "passed"
+        },
+        {
+          "name": "test_tmux_backend_kimi_skip_permissions_workspace_and_prompt",
+          "fullName": "tests/test_spawn_backends.py::test_tmux_backend_kimi_skip_permissions_workspace_and_prompt",
+          "state": "passed"
+        },
+        {
+          "name": "test_subprocess_backend_kimi_skip_permissions_workspace_and_prompt",
+          "fullName": "tests/test_spawn_backends.py::test_subprocess_backend_kimi_skip_permissions_workspace_and_prompt",
+          "state": "passed"
+        },
+        {
+          "name": "test_resolve_clawteam_executable_ignores_unrelated_argv0",
+          "fullName": "tests/test_spawn_backends.py::test_resolve_clawteam_executable_ignores_unrelated_argv0",
+          "state": "passed"
+        },
+        {
+          "name": "test_resolve_clawteam_executable_ignores_relative_argv0_even_if_local_file_exists",
+          "fullName": "tests/test_spawn_backends.py::test_resolve_clawteam_executable_ignores_relative_argv0_even_if_local_file_exists",
+          "state": "passed"
+        },
+        {
+          "name": "test_resolve_clawteam_executable_accepts_relative_path_with_explicit_directory",
+          "fullName": "tests/test_spawn_backends.py::test_resolve_clawteam_executable_accepts_relative_path_with_explicit_directory",
+          "state": "passed"
+        },
+        {
+          "name": "test_subprocess_backend_injects_system_prompt_for_claude",
+          "fullName": "tests/test_spawn_backends.py::test_subprocess_backend_injects_system_prompt_for_claude",
+          "state": "passed"
+        },
+        {
+          "name": "test_subprocess_backend_skips_system_prompt_for_non_claude",
+          "fullName": "tests/test_spawn_backends.py::test_subprocess_backend_skips_system_prompt_for_non_claude",
+          "state": "passed"
+        },
+        {
+          "name": "test_subprocess_backend_sets_utf8_locale",
+          "fullName": "tests/test_spawn_backends.py::test_subprocess_backend_sets_utf8_locale",
+          "state": "passed"
+        },
+        {
+          "name": "test_tmux_backend_injects_system_prompt_for_claude",
+          "fullName": "tests/test_spawn_backends.py::test_tmux_backend_injects_system_prompt_for_claude",
+          "state": "passed"
+        },
+        {
+          "name": "test_detects_prompt_indicator",
+          "fullName": "tests/test_spawn_backends.py::TestWaitForCliReady::test_detects_prompt_indicator",
+          "state": "passed"
+        },
+        {
+          "name": "test_detects_content_stabilisation",
+          "fullName": "tests/test_spawn_backends.py::TestWaitForCliReady::test_detects_content_stabilisation",
+          "state": "passed"
+        },
+        {
+          "name": "test_times_out_on_empty_pane",
+          "fullName": "tests/test_spawn_backends.py::TestWaitForCliReady::test_times_out_on_empty_pane",
+          "state": "passed"
+        },
+        {
+          "name": "test_inject_prompt_via_buffer_uses_load_and_paste",
+          "fullName": "tests/test_spawn_backends.py::test_inject_prompt_via_buffer_uses_load_and_paste",
+          "state": "passed"
+        },
+        {
+          "name": "test_tmux_backend_qwen_skip_permissions_and_prompt",
+          "fullName": "tests/test_spawn_backends.py::test_tmux_backend_qwen_skip_permissions_and_prompt",
+          "state": "passed"
+        },
+        {
+          "name": "test_tmux_backend_opencode_skip_permissions_and_prompt",
+          "fullName": "tests/test_spawn_backends.py::test_tmux_backend_opencode_skip_permissions_and_prompt",
+          "state": "passed"
+        },
+        {
+          "name": "test_subprocess_backend_qwen_skip_permissions_and_prompt",
+          "fullName": "tests/test_spawn_backends.py::test_subprocess_backend_qwen_skip_permissions_and_prompt",
+          "state": "passed"
+        },
+        {
+          "name": "test_subprocess_backend_opencode_skip_permissions_and_prompt",
+          "fullName": "tests/test_spawn_backends.py::test_subprocess_backend_opencode_skip_permissions_and_prompt",
+          "state": "passed"
+        },
+        {
+          "name": "test_load_skill_content_directory_format",
+          "fullName": "tests/test_spawn_backends.py::test_load_skill_content_directory_format",
+          "state": "passed"
+        },
+        {
+          "name": "test_load_skill_content_single_file_format",
+          "fullName": "tests/test_spawn_backends.py::test_load_skill_content_single_file_format",
+          "state": "passed"
+        },
+        {
+          "name": "test_load_skill_content_returns_none_for_missing",
+          "fullName": "tests/test_spawn_backends.py::test_load_skill_content_returns_none_for_missing",
+          "state": "passed"
+        },
+        {
+          "name": "test_cmux_confirm_trust_uses_surface_flag",
+          "fullName": "tests/test_spawn_backends.py::test_cmux_confirm_trust_uses_surface_flag",
+          "state": "passed"
+        }
+      ]
+    }
+  ]
+}

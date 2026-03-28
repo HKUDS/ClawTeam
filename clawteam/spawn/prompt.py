@@ -64,21 +64,7 @@ def build_agent_prompt(
         else:
             lines.append("- Work directly in this repository path unless told otherwise.")
 
-    lines.extend([
-        "",
-        "## Task\n",
-        task,
-    ])
-
-    # Inject cross-agent context awareness
-    context_block = _build_context_block(team_name, agent_name, repo_path)
-    if context_block:
-        lines.extend([
-            "",
-            "## Context\n",
-            context_block,
-        ])
-
+    # Coordination protocol BEFORE task — task has last-word priority
     lines.extend([
         "",
         "## Coordination Protocol\n",
@@ -102,4 +88,21 @@ def build_agent_prompt(
         "- Repeat this loop until the leader confirms shutdown or there is truly no more work to do.",
         "",
     ])
+
+    # Inject cross-agent context awareness
+    context_block = _build_context_block(team_name, agent_name, repo_path)
+    if context_block:
+        lines.extend([
+            "",
+            "## Context\n",
+            context_block,
+        ])
+
+    # Task LAST — user's instructions get final priority
+    lines.extend([
+        "",
+        "## Task\n",
+        task,
+    ])
+
     return "\n".join(lines)

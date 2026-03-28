@@ -478,8 +478,6 @@ class CmuxBackend(SpawnBackend):
                     poll_interval_seconds=0.2,
                 )
 
-        # Trust prompts appear per-CLI-process, not per-workspace — surfaces
-        # launching into fresh worktrees hit the same trust gate.
         _confirm_trust_if_prompted(
             cmux_handle,
             normalized_command,
