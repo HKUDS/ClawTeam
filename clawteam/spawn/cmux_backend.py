@@ -327,7 +327,7 @@ class CmuxBackend(SpawnBackend):
             from clawteam.config import load_config
 
             cfg = load_config()
-            pane_ready_timeout = min(cfg.spawn_ready_timeout, max(4.0, cfg.spawn_prompt_delay + 2.0))
+            pane_ready_timeout = min(cfg.spawn_ready_timeout, max(15.0, cfg.spawn_prompt_delay + 2.0))
             if not _wait_for_cmux_workspace(
                 workspace_name,
                 timeout_seconds=pane_ready_timeout,
@@ -700,7 +700,7 @@ def _wait_for_surface_ready(
 
 
 def _inject_prompt_via_surface(surface_ref: str, prompt: str) -> bool:
-    """Inject a prompt into a cmux surface via send + send-key."""
+    """Inject a prompt into a cmux surface via send + send-key Enter."""
     with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
         f.write(prompt)
         prompt_file = f.name
@@ -709,6 +709,7 @@ def _inject_prompt_via_surface(surface_ref: str, prompt: str) -> bool:
         with open(prompt_file) as f:
             prompt_text = f.read()
 
+        # Send prompt text
         result = subprocess.run(
             [_CMUX_BIN, "send", "--surface", surface_ref, prompt_text],
             capture_output=True, text=True, timeout=10,
@@ -718,10 +719,17 @@ def _inject_prompt_via_surface(surface_ref: str, prompt: str) -> bool:
 
         time.sleep(0.5)
 
+        # Submit with Enter via send-key
         result = subprocess.run(
             [_CMUX_BIN, "send-key", "--surface", surface_ref, "Enter"],
             capture_output=True, text=True, timeout=5,
         )
-        return result.returncode == 0
+        if result.returncode != 0:
+            # Fallback: try \n in send text
+            subprocess.run(
+                [_CMUX_BIN, "send", "--surface", surface_ref, "\\n"],
+                capture_output=True, text=True, timeout=5,
+            )
+        return True
     finally:
         os.unlink(prompt_file)
