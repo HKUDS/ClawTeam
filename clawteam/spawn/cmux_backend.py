@@ -222,6 +222,22 @@ class CmuxBackend(SpawnBackend):
         # workspace_name is only for display/rename purposes.
         cmux_handle = workspace_ref or workspace_name
 
+        # Set team badge in sidebar
+        team_type = "side-quest" if team_name.startswith("sq-") else "build"
+        icon = "magnifier" if team_type == "side-quest" else "hammer"
+        color = "#007aff" if team_type == "side-quest" else "#ff9500"
+        subprocess.run(
+            [_CMUX_BIN, "set-status", "team", team_name,
+             "--icon", icon, "--color", color, "--workspace", cmux_handle],
+            capture_output=True, text=True, timeout=5,
+        )
+        # Set role badge in sidebar
+        subprocess.run(
+            [_CMUX_BIN, "set-status", "role", agent_name,
+             "--icon", "sparkle", "--workspace", cmux_handle],
+            capture_output=True, text=True, timeout=5,
+        )
+
         # Restore focus to previous workspace to avoid focus steal
         if previous_workspace:
             subprocess.run(
