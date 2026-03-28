@@ -345,10 +345,12 @@ class CmuxBackend(SpawnBackend):
                 )
             except subprocess.TimeoutExpired:
                 os.unlink(launcher_path)
+                os.unlink(env_path)
                 return "Error: cmux new-surface timed out after 30s"
 
             if launch.returncode != 0:
                 os.unlink(launcher_path)
+                os.unlink(env_path)
                 stderr = launch.stderr.strip() if launch.stderr else ""
                 return f"Error: failed to create cmux surface: {stderr}"
 
@@ -388,10 +390,12 @@ class CmuxBackend(SpawnBackend):
                 )
             except subprocess.TimeoutExpired:
                 os.unlink(launcher_path)
+                os.unlink(env_path)
                 return "Error: cmux new-workspace timed out after 30s"
 
             if launch.returncode != 0:
                 os.unlink(launcher_path)
+                os.unlink(env_path)
                 stderr = launch.stderr.strip() if launch.stderr else ""
                 return f"Error: failed to launch cmux workspace: {stderr}"
 
