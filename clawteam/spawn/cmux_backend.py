@@ -305,11 +305,19 @@ class CmuxBackend(SpawnBackend):
         os.chmod(env_path, 0o600)  # restrict read to owner
 
         cmd_str = " ".join(shlex.quote(c) for c in final_command)
-        # On-exit hook: runs when agent process exits
+        # On-exit hook: runs when agent process exits.
+        # Capture exit code and include it in the DONE message so parents can
+        # distinguish clean exits from crashes.  Only send the fallback DONE if
+        # the agent didn't already post one (avoids duplicate messages).
         exit_cmd = shlex.quote(clawteam_bin) if os.path.isabs(clawteam_bin) else "clawteam"
         exit_hook = (
+            f"_ec=$?; "
+            f"_already=$({exit_cmd} inbox peek {shlex.quote(team_name)} "
+            f"--agent leader 2>/dev/null | grep -c 'DONE:' || true); "
+            f'if [ "$_already" = "0" ]; then '
             f"{exit_cmd} inbox send {shlex.quote(team_name)} leader "
-            f"'DONE: agent exited' -f {shlex.quote(agent_name)} 2>/dev/null; "
+            f"\"DONE: agent exited (exit_code=$_ec)\" -f {shlex.quote(agent_name)} 2>/dev/null; "
+            f"fi; "
             f"{exit_cmd} lifecycle on-exit --team {shlex.quote(team_name)} "
             f"--agent {shlex.quote(agent_name)}"
         )
@@ -371,6 +379,7 @@ class CmuxBackend(SpawnBackend):
 
             if not surface_ref:
                 os.unlink(launcher_path)
+                os.unlink(env_path)
                 return f"Error: could not parse surface ref from cmux output: {stdout}"
 
             # Rename tab for identification
@@ -479,13 +488,15 @@ class CmuxBackend(SpawnBackend):
                     "using it with clawteam spawn."
                 )
 
-            if post_launch_prompt and is_codex_command(normalized_command):
-                _dismiss_codex_update_prompt_if_present(
-                    cmux_handle,
-                    normalized_command,
-                    timeout_seconds=pane_ready_timeout,
-                    poll_interval_seconds=0.2,
-                )
+        # Codex update dismissal — applies to both workspace and surface modes
+        if post_launch_prompt and is_codex_command(normalized_command):
+            _dismiss_codex_update_prompt_if_present(
+                cmux_handle,
+                normalized_command,
+                is_surface=is_surface,
+                timeout_seconds=cfg.spawn_ready_timeout,
+                poll_interval_seconds=0.2,
+            )
 
         _confirm_trust_if_prompted(
             cmux_handle,
@@ -534,7 +545,7 @@ class CmuxBackend(SpawnBackend):
             agent_name=agent_name,
             backend="cmux",
             tmux_target=workspace_name,  # reuse field for workspace name
-            pid=0,  # cmux doesn't expose pane PIDs
+            pid=-1,  # cmux doesn't expose pane PIDs; -1 sentinel skips PID liveness check
             command=list(final_command),
         )
 
@@ -663,6 +674,7 @@ def _looks_like_codex_update_prompt(screen_text: str) -> bool:
 def _dismiss_codex_update_prompt_if_present(
     workspace_name: str,
     command: list[str],
+    is_surface: bool = False,
     timeout_seconds: float = 5.0,
     poll_interval_seconds: float = 0.2,
 ) -> bool:
@@ -670,12 +682,13 @@ def _dismiss_codex_update_prompt_if_present(
     if not is_codex_command(command):
         return False
 
+    flag = "--surface" if is_surface else "--workspace"
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
-        screen_text = _read_screen(workspace_name).lower()
+        screen_text = _read_screen(workspace_name, is_surface=is_surface).lower()
         if _looks_like_codex_update_prompt(screen_text):
             subprocess.run(
-                [_CMUX_BIN, "send-key", "--workspace", workspace_name, "Enter"],
+                [_CMUX_BIN, "send-key", flag, workspace_name, "Enter"],
                 capture_output=True, text=True, timeout=5,
             )
             time.sleep(0.5)
@@ -707,6 +720,14 @@ def _verify_and_cleanup_inner(team_name: str, agent_name: str) -> str:
     branch = f"clawteam/{team_name}/{agent_name}"
     workspace = f"{team_name}-{agent_name}"
 
+    # Gate 0: gh CLI required — refuse to destroy without PR verification
+    gh_path = shutil.which("gh")
+    if not gh_path:
+        return (
+            f"BLOCKED: gh CLI not found — cannot verify PR status before cleanup. "
+            f"Install gh or clean up manually."
+        )
+
     worktree_exists = os.path.isdir(worktree)
 
     if worktree_exists:
@@ -732,24 +753,20 @@ def _verify_and_cleanup_inner(team_name: str, agent_name: str) -> str:
                 return f"BLOCKED: Unpushed commits on {branch}:\n{unpushed}"
 
     # Gate 3: PR merged? (runs even if worktree gone)
-    gh_path = shutil.which("gh")
-    if gh_path:
-        merged = subprocess.run(
-            ["gh", "pr", "list", "--head", branch, "--state", "merged", "--json", "number"],
+    merged = subprocess.run(
+        ["gh", "pr", "list", "--head", branch, "--state", "merged", "--json", "number"],
+        capture_output=True, text=True, timeout=15,
+    )
+    if merged.returncode == 0 and merged.stdout.strip() not in ("", "[]"):
+        pass  # merged — continue to cleanup
+    else:
+        open_pr = subprocess.run(
+            ["gh", "pr", "list", "--head", branch, "--state", "open", "--json", "number,url"],
             capture_output=True, text=True, timeout=15,
         )
-        if merged.returncode == 0 and merged.stdout.strip() not in ("", "[]"):
-            pass  # merged — continue to cleanup
-        else:
-            open_pr = subprocess.run(
-                ["gh", "pr", "list", "--head", branch, "--state", "open", "--json", "number,url"],
-                capture_output=True, text=True, timeout=15,
-            )
-            if open_pr.returncode == 0 and open_pr.stdout.strip() not in ("", "[]"):
-                return f"BLOCKED: PR not yet merged: {open_pr.stdout.strip()}"
-            return f"BLOCKED: No PR found for branch {branch}"
-    else:
-        print(f"Warning: gh CLI not found. Cannot verify PR status for {branch}.")
+        if open_pr.returncode == 0 and open_pr.stdout.strip() not in ("", "[]"):
+            return f"BLOCKED: PR not yet merged: {open_pr.stdout.strip()}"
+        return f"BLOCKED: No PR found for branch {branch}"
 
     # All gates passed — destroy
     messages = []
