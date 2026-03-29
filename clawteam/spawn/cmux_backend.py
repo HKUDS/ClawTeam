@@ -308,10 +308,10 @@ class CmuxBackend(SpawnBackend):
         # On-exit hook: runs when agent process exits
         exit_cmd = shlex.quote(clawteam_bin) if os.path.isabs(clawteam_bin) else "clawteam"
         exit_hook = (
-            f"{exit_cmd} lifecycle on-exit --team {shlex.quote(team_name)} "
-            f"--agent {shlex.quote(agent_name)}; "
             f"{exit_cmd} inbox send {shlex.quote(team_name)} leader "
-            f"'DONE: agent exited' -f {shlex.quote(agent_name)} 2>/dev/null"
+            f"'DONE: agent exited' -f {shlex.quote(agent_name)} 2>/dev/null; "
+            f"{exit_cmd} lifecycle on-exit --team {shlex.quote(team_name)} "
+            f"--agent {shlex.quote(agent_name)}"
         )
         # Auto-close cmux workspace after agent exits + cleanup badges.
         ws_name = f"{team_name}-{agent_name}"
