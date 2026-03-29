@@ -694,6 +694,15 @@ def verify_and_cleanup(team_name: str, agent_name: str = "builder") -> str:
     Gate pipeline: clean worktree -> pushed -> PR merged -> destroy.
     Returns a status string: success message or BLOCKED with reason.
     """
+    try:
+        return _verify_and_cleanup_inner(team_name, agent_name)
+    except subprocess.TimeoutExpired as e:
+        return f"BLOCKED: git command timed out ({e.cmd}). Check for lock files."
+    except OSError as e:
+        return f"BLOCKED: OS error during cleanup: {e}"
+
+
+def _verify_and_cleanup_inner(team_name: str, agent_name: str) -> str:
     worktree = os.path.expanduser(f"~/.clawteam/workspaces/{team_name}/{agent_name}")
     branch = f"clawteam/{team_name}/{agent_name}"
     workspace = f"{team_name}-{agent_name}"
@@ -748,11 +757,16 @@ def verify_and_cleanup(team_name: str, agent_name: str = "builder") -> str:
     if worktree_exists:
         subprocess.run(["git", "worktree", "remove", worktree, "--force"],
                        capture_output=True, timeout=30)
-        messages.append(f"worktree removed")
+        messages.append("worktree removed")
 
-    subprocess.run(["git", "push", "origin", "--delete", branch],
-                   capture_output=True, timeout=15)
-    messages.append("remote branch deleted")
+    delete_result = subprocess.run(
+        ["git", "push", "origin", "--delete", branch],
+        capture_output=True, timeout=15,
+    )
+    if delete_result.returncode == 0:
+        messages.append("remote branch deleted")
+    else:
+        messages.append("remote branch already gone")
 
     subprocess.run([_CMUX_BIN, "close-workspace", "--workspace", workspace],
                    capture_output=True, text=True, timeout=5)
