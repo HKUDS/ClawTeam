@@ -94,7 +94,7 @@ class WorkspaceManager:
     def __init__(self, repo_path: Path | None = None):
         cwd = repo_path or Path.cwd()
         self.repo_root = git.repo_root(cwd)
-        self.base_branch = git.current_branch(self.repo_root)
+        self.base_branch = git.default_remote_branch(self.repo_root)
 
     # ------------------------------------------------------------------
     # Create

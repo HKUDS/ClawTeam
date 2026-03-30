@@ -45,6 +45,21 @@ def current_branch(repo: Path) -> str:
         return _run(["rev-parse", "--short", "HEAD"], cwd=repo)
 
 
+def default_remote_branch(repo: Path) -> str:
+    """Return the default remote branch (e.g. 'origin/master').
+
+    Tries origin/HEAD first, then origin/master, then origin/main.
+    Falls back to current_branch if no remote found.
+    """
+    for ref in ("origin/HEAD", "origin/master", "origin/main"):
+        try:
+            _run(["rev-parse", "--verify", ref], cwd=repo)
+            return ref
+        except GitError:
+            continue
+    return current_branch(repo)
+
+
 def create_worktree(
     repo: Path,
     worktree_path: Path,
