@@ -496,6 +496,18 @@ clawteam spawn tmux codex --team my-team --agent-name bob --task "Write frontend
 # nanobot
 clawteam spawn tmux nanobot --team my-team --agent-name carol --task "Build the API"
 
+# Qwen Code
+clawteam spawn tmux qwen --team my-team --agent-name eve --task "Refactor the parser"
+
+# pi
+clawteam spawn tmux pi --team my-team --agent-name frank --task "Fix the CI pipeline"
+
+# Gemini CLI
+clawteam spawn tmux gemini --team my-team --agent-name grace --task "Write integration tests"
+
+# OpenCode
+clawteam spawn tmux opencode --team my-team --agent-name heidi --task "Implement the cache layer"
+
 # A configured profile (recommended for non-default providers/models)
 clawteam spawn tmux --profile claude-kimi --team my-team --agent-name dave --task "Refactor the auth flow"
 ```
@@ -539,6 +551,10 @@ All examples below assume the corresponding CLI already runs standalone on your 
 | [OpenClaw](https://github.com/openclaw/openclaw) | `clawteam spawn tmux openclaw --team ...` | ✅ Full support |
 | [nanobot](https://github.com/HKUDS/nanobot) | `clawteam spawn tmux nanobot --team ...` | ✅ Full support |
 | [Kimi CLI](https://github.com/MoonshotAI/kimi-cli) | `clawteam spawn tmux kimi --team ...` | ✅ Full support |
+| [Qwen Code](https://github.com/QwenLM/qwen-code) | `clawteam spawn tmux qwen --team ...` | 🔮 Experimental |
+| [pi](https://github.com/mariozechner/pi-coding-agent) | `clawteam spawn tmux pi --team ...` | 🔮 Experimental |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | `clawteam spawn tmux gemini --team ...` | 🔮 Experimental |
+| [OpenCode](https://github.com/opencode-ai/opencode) | `clawteam spawn tmux opencode --team ...` | 🔮 Experimental |
 | [Cursor](https://cursor.com) | `clawteam spawn subprocess cursor --team ...` | 🔮 Experimental |
 | Custom scripts | `clawteam spawn subprocess python --team ...` | ✅ Full support |
 
