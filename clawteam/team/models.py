@@ -49,6 +49,8 @@ class TaskPriority(str, Enum):
 
 class MessageType(str, Enum):
     message = "message"
+    room_update = "room_update"
+    validation_result = "validation_result"
     join_request = "join_request"
     join_approved = "join_approved"
     join_rejected = "join_rejected"
@@ -119,6 +121,18 @@ class TeamMessage(BaseModel):
     # idle notification fields
     last_task: str | None = Field(default=None, alias="lastTask")
     status: str | None = None
+    # structured room updates
+    update_kind: str | None = Field(default=None, alias="updateKind")
+    blocker: str | None = None
+    final_delivery: str | None = Field(default=None, alias="finalDelivery")
+    artifact_files: list[str] | None = Field(default=None, alias="artifactFiles")
+    next_action: str | None = Field(default=None, alias="nextAction")
+    # structured validation results
+    maker_agent: str | None = Field(default=None, alias="makerAgent")
+    validation_claim: str | None = Field(default=None, alias="validationClaim")
+    validation_evidence: list[str] | None = Field(default=None, alias="validationEvidence")
+    validation_verdict: str | None = Field(default=None, alias="validationVerdict")
+    validation_follow_up: str | None = Field(default=None, alias="validationFollowUp")
 
 
 class TaskItem(BaseModel):

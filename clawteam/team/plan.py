@@ -62,6 +62,20 @@ def team_plans_path(team_name: str) -> Path:
     return ensure_within_root(_plans_root_path(), validate_identifier(team_name, "team name"))
 
 
+def stage_launch_plan(team_name: str, source_path: str | Path) -> Path:
+    """Copy an external launch plan artifact into the team-scoped plan directory."""
+    validate_identifier(team_name, "team name")
+    source = Path(source_path).expanduser()
+    if not source.is_file():
+        raise FileNotFoundError(f"Plan file not found: {source}")
+
+    suffix = source.suffix or ".md"
+    target_dir = _team_plans_root(team_name)
+    target_path = target_dir / f"launch-plan{suffix}"
+    target_path.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    return target_path
+
+
 def referenced_legacy_plan_paths(team_name: str) -> set[Path]:
     """Return legacy flat plan files referenced by this team's event log."""
     team_events_dir = ensure_within_root(
@@ -126,7 +140,6 @@ class PlanManager:
             request_id=plan_id,
             plan_file=str(plan_path),
             summary=summary or plan_content[:200],
-            plan=plan_content,
         )
         return plan_id
 

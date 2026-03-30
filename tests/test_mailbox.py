@@ -97,6 +97,79 @@ class TestSendReceive:
         with pytest.raises(ValueError, match="Invalid recipient name"):
             mb.send(from_agent="alice", to="../bob", content="nope")
 
+    def test_send_room_update_persists_structured_fields(self, team_name):
+        TeamManager.create_team(team_name, "leader", "leader001")
+        TeamManager.add_member(team_name, "worker", "worker001")
+
+        mb = _make_mailbox(team_name)
+        mb.send_room_update(
+            from_agent="worker",
+            to="leader",
+            status="blocked",
+            blocker="Waiting on validator",
+            final_delivery="Patch prepared",
+            artifact_files=["/tmp/patch.diff", "/tmp/report.md"],
+            next_action="Assign checker",
+            update_kind="execution",
+            summary="Worker is blocked pending review.",
+        )
+
+        [message] = mb.receive("leader")
+
+        assert message.type == MessageType.room_update
+        assert message.status == "blocked"
+        assert message.blocker == "Waiting on validator"
+        assert message.final_delivery == "Patch prepared"
+        assert message.artifact_files == ["/tmp/patch.diff", "/tmp/report.md"]
+        assert message.next_action == "Assign checker"
+        assert message.update_kind == "execution"
+        assert message.summary == "Worker is blocked pending review."
+
+    def test_send_validation_result_requires_distinct_validator_and_maker(self, team_name):
+        TeamManager.create_team(team_name, "leader", "leader001")
+        TeamManager.add_member(team_name, "worker", "worker001")
+
+        mb = _make_mailbox(team_name)
+
+        with pytest.raises(ValueError, match="must differ"):
+            mb.send_validation_result(
+                from_agent="worker",
+                to="leader",
+                maker_agent="worker",
+                claim="Patch is ready",
+                evidence=["Tests pass"],
+                verdict="pass",
+            )
+
+    def test_send_validation_result_persists_structured_fields(self, team_name):
+        TeamManager.create_team(team_name, "leader", "leader001")
+        TeamManager.add_member(team_name, "worker", "worker001")
+        TeamManager.add_member(team_name, "reviewer", "reviewer001")
+
+        mb = _make_mailbox(team_name)
+        mb.send_validation_result(
+            from_agent="reviewer",
+            to="leader",
+            maker_agent="worker",
+            claim="Patch is ready",
+            evidence=["8 tests passed", "Checked artifact /tmp/report.md"],
+            verdict="needs_follow_up",
+            follow_up="Ask worker to fix flaky teardown",
+            artifact_files=["/tmp/report.md"],
+            summary="Independent validation found one follow-up item.",
+        )
+
+        [message] = mb.receive("leader")
+
+        assert message.type == MessageType.validation_result
+        assert message.from_agent == "reviewer"
+        assert message.maker_agent == "worker"
+        assert message.validation_claim == "Patch is ready"
+        assert message.validation_evidence == ["8 tests passed", "Checked artifact /tmp/report.md"]
+        assert message.validation_verdict == "needs_follow_up"
+        assert message.validation_follow_up == "Ask worker to fix flaky teardown"
+        assert message.artifact_files == ["/tmp/report.md"]
+
 
 class TestPeek:
     def test_peek_does_not_consume(self, team_name):

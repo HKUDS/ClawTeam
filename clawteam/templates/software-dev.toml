@@ -23,9 +23,11 @@ Workflow:
 2. Spawn worker agents for parallel workstreams
 3. Monitor task completion and unblock dependencies
 4. Review and integrate completed work
-5. Report final status to user
+5. Send the integrated delivery to qa-engineer for independent validation:
+   `clawteam inbox room-update {team_name} qa-engineer --update-kind integration --status completed --summary "Integrated delivery ready for QA validation" --final-delivery "[branch, commit, or build artifact]" --artifact-file [artifact path] --next-action "Validate tests, regressions, and ship-readiness"`
+6. Wait for qa-engineer's independent validation via `clawteam inbox peek {team_name} --agent {agent_name}` before reporting final status to the user
 
-Use `clawteam inbox receive {team_name}` to get updates from team members."""
+Use `clawteam inbox peek {team_name} --agent {agent_name}` to get structured updates from team members and from qa-engineer."""
 
 [[template.agents]]
 name = "backend-dev"
@@ -43,7 +45,8 @@ Your responsibilities:
 Check your tasks: `clawteam task list {team_name} --owner {agent_name}`
 Start working: `clawteam task update {team_name} [task-id] --status in_progress`
 When done: `clawteam task update {team_name} [task-id] --status completed`
-Report issues to tech-lead: `clawteam inbox send {team_name} tech-lead "Issue: [description]"`
+Send structured updates to tech-lead:
+`clawteam inbox room-update {team_name} tech-lead --update-kind backend-delivery --status [in_progress|blocked|completed] --summary "[API or backend milestone]" --blocker "[current blocker if any]" --final-delivery "[branch, diff, or service artifact]" --artifact-file [artifact path] --next-action "[what tech-lead should do next]"`
 Checkpoint your work: `clawteam workspace checkpoint {team_name} --agent {agent_name}`"""
 
 [[template.agents]]
@@ -62,7 +65,8 @@ Your responsibilities:
 Check your tasks: `clawteam task list {team_name} --owner {agent_name}`
 Start working: `clawteam task update {team_name} [task-id] --status in_progress`
 When done: `clawteam task update {team_name} [task-id] --status completed`
-Report issues to tech-lead: `clawteam inbox send {team_name} tech-lead "Issue: [description]"`
+Send structured updates to tech-lead:
+`clawteam inbox room-update {team_name} tech-lead --update-kind frontend-delivery --status [in_progress|blocked|completed] --summary "[UI or client milestone]" --blocker "[current blocker if any]" --final-delivery "[branch, diff, or preview artifact]" --artifact-file [artifact path] --next-action "[what tech-lead should do next]"`
 Checkpoint your work: `clawteam workspace checkpoint {team_name} --agent {agent_name}`"""
 
 [[template.agents]]
@@ -81,8 +85,10 @@ Your responsibilities:
 Check your tasks: `clawteam task list {team_name} --owner {agent_name}`
 Start working: `clawteam task update {team_name} [task-id] --status in_progress`
 When done: `clawteam task update {team_name} [task-id] --status completed`
-Report bugs to tech-lead: `clawteam inbox send {team_name} tech-lead "BUG: [description]"`
-Verify fixes: `clawteam inbox send {team_name} tech-lead "VERIFIED: [bug-id]"`"""
+Report bugs and verification notes with structured room updates:
+`clawteam inbox room-update {team_name} tech-lead --update-kind qa-findings --status [blocked|completed] --summary "BUG: [description] or VERIFIED: [bug-id]" --final-delivery "[test report or repro artifact]" --artifact-file [artifact path] --next-action "[fix or release recommendation]"`
+When tech-lead shares the integrated delivery, validate it independently:
+`clawteam inbox validate {team_name} tech-lead --maker-agent tech-lead --claim "Integrated delivery passes the required QA checks and is ready to report upstream" --evidence "[test report]" --evidence "[manual verification or build artifact]" --verdict [pass|needs_follow_up] --follow-up "[required correction if any]"`"""
 
 [[template.agents]]
 name = "devops"
@@ -100,7 +106,8 @@ Your responsibilities:
 Check your tasks: `clawteam task list {team_name} --owner {agent_name}`
 Start working: `clawteam task update {team_name} [task-id] --status in_progress`
 When done: `clawteam task update {team_name} [task-id] --status completed`
-Report status to tech-lead: `clawteam inbox send {team_name} tech-lead "DEPLOY: [environment] - [status]"`"""
+Report status to tech-lead with a structured room update:
+`clawteam inbox room-update {team_name} tech-lead --update-kind deploy-readiness --status [in_progress|blocked|completed] --summary "DEPLOY: [environment] - [status]" --final-delivery "[pipeline or infra artifact]" --artifact-file [artifact path] --next-action "[deployment follow-up or blocker]"`"""
 
 [[template.tasks]]
 subject = "Create technical specification and task breakdown"

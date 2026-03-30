@@ -95,28 +95,6 @@ def _spawn_backend_hint(backend: str | None, team: str | None) -> str:
     )
 
 
-def _load_skill_content(name: str) -> str | None:
-    """Load skill content from ~/.claude/skills.
-
-    Supports both directory format (skills/<name>/SKILL.md) and
-    single-file format (skills/<name>.md).
-    """
-    skills_root = Path.home() / ".claude" / "skills"
-    skill_dir = skills_root / name
-    if skill_dir.is_dir():
-        skill_file = skill_dir / "SKILL.md"
-        if not skill_file.exists():
-            markdown_files = sorted(skill_dir.glob("*.md"))
-            skill_file = markdown_files[0] if markdown_files else None
-        if skill_file and skill_file.exists():
-            return skill_file.read_text(encoding="utf-8")
-
-    single_file = skills_root / f"{name}.md"
-    if single_file.exists():
-        return single_file.read_text(encoding="utf-8")
-    return None
-
-
 def _parse_key_value_items(items: list[str], *, label: str) -> dict[str, str]:
     """Parse repeated KEY=VALUE CLI options into a dict."""
     parsed: dict[str, str] = {}
@@ -130,6 +108,42 @@ def _parse_key_value_items(items: list[str], *, label: str) -> dict[str, str]:
             raise typer.Exit(1)
         parsed[key] = value
     return parsed
+
+
+def _load_skill_content(name: str) -> str | None:
+    """Compatibility wrapper around the shared skill loader."""
+    from clawteam.spawn.skills import load_skill_content
+
+    return load_skill_content(name)
+
+
+def _message_preview(message: dict, *, limit: int | None = None) -> str:
+    """Render a compact human preview for inbox-style message output."""
+    preview = (message.get("content") or "").strip() or (message.get("summary") or "").strip()
+    if not preview and message.get("type") == "room_update":
+        parts: list[str] = []
+        if message.get("updateKind"):
+            parts.append(str(message["updateKind"]))
+        if message.get("status"):
+            parts.append(f"status={message['status']}")
+        if message.get("blocker"):
+            parts.append(f"blocker={message['blocker']}")
+        if message.get("finalDelivery"):
+            parts.append(f"delivery={message['finalDelivery']}")
+        preview = "; ".join(parts) or "room update"
+    if not preview and message.get("type") == "validation_result":
+        maker = message.get("makerAgent") or "unknown maker"
+        verdict = message.get("validationVerdict")
+        claim = message.get("validationClaim")
+        if verdict:
+            preview = f"validation for {maker}: {verdict}"
+        elif claim:
+            preview = f"validation for {maker}: {claim}"
+        else:
+            preview = "validation result"
+    if limit is not None:
+        return preview[:limit]
+    return preview
 
 
 def _load_questionary():
@@ -1729,6 +1743,87 @@ def inbox_send(
     _output(data, lambda d: console.print(f"[green]OK[/green] Message sent to '{to}'"))
 
 
+@inbox_app.command("room-update")
+def inbox_room_update(
+    team: str = typer.Argument(..., help="Team name"),
+    to: str = typer.Argument(..., help="Recipient agent name"),
+    content: Optional[str] = typer.Option(None, "--content", help="Optional human note"),
+    summary: Optional[str] = typer.Option(None, "--summary", help="Optional compact summary override"),
+    status: Optional[str] = typer.Option(None, "--status", help="Structured status value"),
+    blocker: Optional[str] = typer.Option(None, "--blocker", help="Current blocker, if any"),
+    final_delivery: Optional[str] = typer.Option(None, "--final-delivery", help="Final delivery note"),
+    artifact_file: Optional[list[str]] = typer.Option(None, "--artifact-file", help="Artifact pointer(s)", show_default=False),
+    next_action: Optional[str] = typer.Option(None, "--next-action", help="Recommended next action"),
+    update_kind: Optional[str] = typer.Option(None, "--update-kind", help="Small update category"),
+    key: Optional[str] = typer.Option(None, "--key", "-k", help="Optional routing key"),
+    from_agent: Optional[str] = typer.Option(None, "--from", "-f", help="Override sender name (default: from env identity)"),
+):
+    """Send a structured room update over the existing inbox transport."""
+    from clawteam.identity import AgentIdentity
+    from clawteam.team.mailbox import MailboxManager
+
+    sender = from_agent or AgentIdentity.from_env().agent_name
+    mailbox = MailboxManager(team)
+    msg = mailbox.send_room_update(
+        from_agent=sender,
+        to=to,
+        content=content,
+        summary=summary,
+        status=status,
+        blocker=blocker,
+        final_delivery=final_delivery,
+        artifact_files=artifact_file,
+        next_action=next_action,
+        update_kind=update_kind,
+        key=key,
+    )
+    data = _dump(msg)
+    _output(data, lambda d: console.print(f"[green]OK[/green] Room update sent to '{to}'"))
+
+
+@inbox_app.command("validate")
+def inbox_validate(
+    team: str = typer.Argument(..., help="Team name"),
+    to: str = typer.Argument(..., help="Recipient agent name"),
+    maker_agent: str = typer.Option(..., "--maker-agent", help="Agent that produced the work being checked"),
+    claim: str = typer.Option(..., "--claim", help="What is being validated"),
+    evidence: list[str] = typer.Option(..., "--evidence", help="Evidence item(s); repeat for multiple"),
+    verdict: str = typer.Option(..., "--verdict", help="Validation verdict"),
+    follow_up: Optional[str] = typer.Option(None, "--follow-up", help="Recommended follow-up action"),
+    content: Optional[str] = typer.Option(None, "--content", help="Optional human note"),
+    summary: Optional[str] = typer.Option(None, "--summary", help="Optional compact summary override"),
+    artifact_file: Optional[list[str]] = typer.Option(None, "--artifact-file", help="Artifact pointer(s)", show_default=False),
+    key: Optional[str] = typer.Option(None, "--key", "-k", help="Optional routing key"),
+    from_agent: Optional[str] = typer.Option(None, "--from", "-f", help="Override validator name (default: from env identity)"),
+):
+    """Send an independent validation result over the existing inbox transport."""
+    from clawteam.identity import AgentIdentity
+    from clawteam.team.mailbox import MailboxManager
+
+    sender = from_agent or AgentIdentity.from_env().agent_name
+    mailbox = MailboxManager(team)
+    try:
+        msg = mailbox.send_validation_result(
+            from_agent=sender,
+            to=to,
+            maker_agent=maker_agent,
+            claim=claim,
+            evidence=evidence,
+            verdict=verdict,
+            follow_up=follow_up,
+            content=content,
+            summary=summary,
+            artifact_files=artifact_file,
+            key=key,
+        )
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    data = _dump(msg)
+    _output(data, lambda d: console.print(f"[green]OK[/green] Validation result sent to '{to}'"))
+
+
 @inbox_app.command("broadcast")
 def inbox_broadcast(
     team: str = typer.Argument(..., help="Team name"),
@@ -1781,7 +1876,7 @@ def inbox_receive(
             console.print(
                 f"[{format_timestamp(m.get('timestamp', ''))}] "
                 f"[cyan]{m.get('type', '')}[/cyan] "
-                f"from={m.get('from', '')} : {m.get('content', '')}"
+                f"from={m.get('from', '')} : {_message_preview(m)}"
             )
 
     _output(data, _human)
@@ -1810,7 +1905,7 @@ def inbox_peek(
             console.print(
                 f"  [{format_timestamp(m.get('timestamp', ''))}] "
                 f"[cyan]{m.get('type', '')}[/cyan] "
-                f"from={m.get('from', '')} : {(m.get('content') or '')[:80]}"
+                f"from={m.get('from', '')} : {_message_preview(m, limit=80)}"
             )
 
     _output(data, _human)
@@ -1843,7 +1938,7 @@ def inbox_log(
             to = m.get("to", "all")
             ts = format_timestamp(m.get("timestamp") or "")
             mtype = m.get("type", "message")
-            content = (m.get("content") or "")[:120]
+            content = _message_preview(m, limit=120)
             console.print(f"  [{ts}] [cyan]{fr}[/cyan] → {to} ({mtype}): {content}")
 
     _output(data, _human)
@@ -3118,15 +3213,16 @@ def spawn_agent(
 
     system_prompt = None
     if skill:
+        from clawteam.spawn.skills import load_skill_bundle
+
         skill_parts: list[str] = []
-        for skill_name in skill:
-            content = _load_skill_content(skill_name)
-            if content is None:
-                console.print(
-                    f"[yellow]Warning: skill '{skill_name}' not found in ~/.claude/skills/[/yellow]"
-                )
-                continue
-            skill_parts.append(content)
+        loaded_guidance, missing_skills = load_skill_bundle(skill)
+        for skill_name in missing_skills:
+            console.print(
+                f"[yellow]Warning: skill '{skill_name}' not found in Codex/Claude skill directories.[/yellow]"
+            )
+        if loaded_guidance:
+            skill_parts.append(loaded_guidance)
         if skill_parts:
             system_prompt = "\n\n".join(skill_parts)
 
@@ -3868,6 +3964,8 @@ def template_show(
 def launch_team(
     template: str = typer.Argument(..., help="Template name (e.g., hedge-fund)"),
     goal: str = typer.Option("", "--goal", "-g", help="Project goal injected into agent prompts"),
+    plan_file: Optional[str] = typer.Option(None, "--plan-file", help="Path to a plan artifact staged for the room"),
+    skill: Optional[list[str]] = typer.Option(None, "--skill", help="Skill name(s) to inject as shared room guidance (repeatable)"),
     backend: Optional[str] = typer.Option(None, "--backend", "-b", help="Override backend"),
     profile: Optional[str] = typer.Option(None, "--profile", help="Apply a named runtime profile to all agents"),
     team_name: Optional[str] = typer.Option(None, "--team-name", "--team", "-t", help="Override team name"),
@@ -3876,172 +3974,47 @@ def launch_team(
     command_override: Optional[list[str]] = typer.Option(None, "--command", help="Override agent command"),
 ):
     """Launch a full agent team from a template with one command."""
-    import os as _os
+    from clawteam.team.launch import launch_team_from_template
 
-    from clawteam.config import get_effective
-    from clawteam.spawn import get_backend
-    from clawteam.spawn.profiles import apply_profile, load_profile
-    from clawteam.spawn.prompt import build_agent_prompt
-    from clawteam.team.manager import TeamManager
-    from clawteam.team.tasks import TaskStore
-    from clawteam.templates import TemplateDef, load_template, render_task
-
-    # 1. Load template
     try:
-        tmpl: TemplateDef = load_template(template)
-    except FileNotFoundError as e:
-        console.print(f"[red]{e}[/red]")
-        raise typer.Exit(1)
-
-    # 2. Determine team name
-    t_name = team_name or f"{tmpl.name}-{uuid.uuid4().hex[:6]}"
-    be_name = backend or tmpl.backend
-    cmd = command_override or tmpl.command
-
-    # 3. Create team
-    leader_id = uuid.uuid4().hex[:12]
-    try:
-        TeamManager.create_team(
-            name=t_name,
-            leader_name=tmpl.leader.name,
-            leader_id=leader_id,
-            description=tmpl.description,
-            user=_os.environ.get("CLAWTEAM_USER", ""),
-        )
-    except ValueError as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(1)
-
-    # 4. Add members
-    agent_ids: dict[str, str] = {tmpl.leader.name: leader_id}
-    for agent in tmpl.agents:
-        aid = uuid.uuid4().hex[:12]
-        agent_ids[agent.name] = aid
-        TeamManager.add_member(
-            team_name=t_name,
-            member_name=agent.name,
-            agent_id=aid,
-            agent_type=agent.type,
-            user=_os.environ.get("CLAWTEAM_USER", ""),
-        )
-
-    # 5. Create tasks
-    ts = TaskStore(t_name)
-    for task_def in tmpl.tasks:
-        ts.create(
-            subject=task_def.subject,
-            description=task_def.description,
-            owner=task_def.owner,
-        )
-
-    # 6. Get backend
-    try:
-        be = get_backend(be_name)
-    except ValueError as e:
-        console.print(f"[red]{e}[/red]")
-        raise typer.Exit(1)
-
-    # Match `spawn` behavior: honor configured permission skipping for
-    # template-launched agents as well.
-    sp_val, _ = get_effective("skip_permissions")
-    skip_permissions = str(sp_val).lower() not in ("false", "0", "no", "")
-
-    # 7. Workspace setup (optional)
-    ws_mgr = None
-    if workspace:
-        from clawteam.workspace import get_workspace_manager
-        ws_mgr = get_workspace_manager(repo)
-        if ws_mgr is None:
-            console.print("[red]Not in a git repository. Use --repo or cd into a repo.[/red]")
-            raise typer.Exit(1)
-
-    # 8. Spawn all agents (leader first, then workers)
-    all_agents = [tmpl.leader] + list(tmpl.agents)
-    spawned: list[dict[str, str]] = []
-    resolved_profile = None
-    if profile:
-        try:
-            resolved_profile = load_profile(profile)
-        except ValueError as e:
-            console.print(f"[red]{e}[/red]")
-            raise typer.Exit(1)
-
-    for agent in all_agents:
-        a_id = agent_ids[agent.name]
-        a_cmd = agent.command or cmd
-        a_env: dict[str, str] = {}
-        if resolved_profile:
-            command_seed = list(a_cmd) if (agent.command or command_override) else []
-            a_cmd, a_env, _ = apply_profile(resolved_profile, command=command_seed)
-
-        # Variable substitution
-        rendered = render_task(
-            agent.task,
+        out = launch_team_from_template(
+            template,
             goal=goal,
-            team_name=t_name,
-            agent_name=agent.name,
+            plan_file=plan_file,
+            skill=skill,
+            backend=backend,
+            profile=profile,
+            team_name=team_name,
+            workspace=workspace,
+            repo=repo,
+            command_override=command_override,
         )
-
-        # Workspace
-        cwd = None
-        ws_branch = ""
-        if ws_mgr:
-            ws_info = ws_mgr.create_workspace(
-                team_name=t_name, agent_name=agent.name, agent_id=a_id,
-            )
-            cwd = ws_info.worktree_path
-            ws_branch = ws_info.branch_name
-
-        # Build prompt
-        prompt = build_agent_prompt(
-            agent_name=agent.name,
-            agent_id=a_id,
-            agent_type=agent.type,
-            team_name=t_name,
-            leader_name=tmpl.leader.name,
-            task=rendered,
-            user=_os.environ.get("CLAWTEAM_USER", ""),
-            workspace_dir=cwd or "",
-            workspace_branch=ws_branch,
-            isolated_workspace=bool(cwd),
-        )
-
-        result = be.spawn(
-            command=a_cmd,
-            agent_name=agent.name,
-            agent_id=a_id,
-            agent_type=agent.type,
-            team_name=t_name,
-            prompt=prompt,
-            env=a_env or None,
-            cwd=cwd,
-            skip_permissions=skip_permissions,
-        )
-        spawned.append({"name": agent.name, "id": a_id, "type": agent.type, "result": result})
-
-    # 9. Output summary
-    out = {
-        "status": "launched",
-        "team": t_name,
-        "template": tmpl.name,
-        "backend": be_name,
-        "agents": [{"name": s["name"], "id": s["id"], "type": s["type"]} for s in spawned],
-    }
+    except (FileNotFoundError, OSError, UnicodeDecodeError, ValueError) as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(1)
 
     def _human(_data):
-        console.print(f"\n[green bold]Team '{t_name}' launched from template '{tmpl.name}'[/green bold]\n")
+        console.print(
+            f"\n[green bold]Team '{_data['team']}' launched from template '{_data['template']}'[/green bold]\n"
+        )
         table = Table(title="Agents")
         table.add_column("Name", style="cyan")
         table.add_column("Type")
         table.add_column("ID", style="dim")
-        for s in spawned:
-            table.add_row(s["name"], s["type"], s["id"])
+        for agent in _data["agents"]:
+            table.add_row(agent["name"], agent["type"], agent["id"])
         console.print(table)
         console.print()
-        if be_name == "tmux":
-            console.print(f"[bold]Attach:[/bold] tmux attach -t clawteam-{t_name}")
-        console.print(f"[bold]Board:[/bold]  clawteam board show {t_name}")
-        console.print(f"[bold]Inbox:[/bold]  clawteam inbox peek {t_name} --agent <name>")
+        if _data["backend"] == "tmux":
+            console.print(f"[bold]Attach:[/bold] tmux attach -t clawteam-{_data['team']}")
+        if _data.get("planFile"):
+            console.print(f"[bold]Plan:[/bold]   {_data['planFile']}")
+        if _data.get("skills"):
+            console.print(f"[bold]Skills:[/bold] {', '.join(_data['skills'])}")
+        if _data.get("missingSkills"):
+            console.print(f"[yellow]Missing skills:[/yellow] {', '.join(_data['missingSkills'])}")
+        console.print(f"[bold]Board:[/bold]  clawteam board show {_data['team']}")
+        console.print(f"[bold]Inbox:[/bold]  clawteam inbox peek {_data['team']} --agent <name>")
 
     _output(out, _human)
 

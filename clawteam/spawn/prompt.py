@@ -24,6 +24,45 @@ def _build_context_block(team_name: str, agent_name: str, repo: str | None = Non
     return ""
 
 
+def _build_launch_artifact_block(
+    agent_name: str,
+    leader_name: str,
+    plan_artifact_path: str,
+) -> str:
+    """Describe the staged launch artifact when a room starts from a plan file."""
+    if not plan_artifact_path:
+        return ""
+
+    lines = [
+        "## Launch Artifact\n",
+        f"- Primary plan file: {plan_artifact_path}",
+    ]
+    if agent_name == leader_name:
+        lines.extend([
+            "- Read this file before decomposing the work or reassigning tasks.",
+            "- Treat it as the source artifact for this room launch. Reference the file instead of pasting large excerpts into messages.",
+        ])
+    else:
+        lines.extend([
+            f"- The leader ({leader_name}) is expected to decompose from this artifact.",
+            "- Read it only when you need original launch context; prefer leader tasking and inbox guidance over repasting the full plan.",
+        ])
+    return "\n".join(lines)
+
+
+def _build_project_guard_block() -> str:
+    """Return the shared room guard baseline injected into every room prompt."""
+    lines = [
+        "## Project Guard\n",
+        "- Reason from the current task, room state, artifacts, diffs, and test results. Do not invent facts or hide uncertainty.",
+        "- Escalate to the leader when requirements are ambiguous, evidence conflicts, verification fails, or you are blocked. Include what you checked and the next decision needed.",
+        "- Validation is independent. The maker must not certify their own work; a different agent or pass must validate artifacts, diffs, test outputs, and room evidence.",
+        "- Completion requires evidence. Do not claim done until the requested output exists, relevant checks are run or explicitly unavailable, remaining risks are stated, and the leader receives artifact pointers plus the next action.",
+        "- Keep updates small and structured: status or blocker, artifact pointers, validation result, remaining risks, and next action.",
+    ]
+    return "\n".join(lines)
+
+
 def build_agent_prompt(
     agent_name: str,
     agent_id: str,
@@ -36,6 +75,7 @@ def build_agent_prompt(
     workspace_branch: str = "",
     isolated_workspace: bool = False,
     repo_path: str | None = None,
+    plan_artifact_path: str = "",
 ) -> str:
     """Build agent prompt: identity + task + context + coordination."""
     lines = [
@@ -69,6 +109,22 @@ def build_agent_prompt(
         "## Task\n",
         task,
     ])
+
+    lines.extend([
+        "",
+        _build_project_guard_block(),
+    ])
+
+    launch_artifact_block = _build_launch_artifact_block(
+        agent_name=agent_name,
+        leader_name=leader_name,
+        plan_artifact_path=plan_artifact_path,
+    )
+    if launch_artifact_block:
+        lines.extend([
+            "",
+            launch_artifact_block,
+        ])
 
     # Inject cross-agent context awareness
     context_block = _build_context_block(team_name, agent_name, repo_path)

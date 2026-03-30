@@ -5,7 +5,7 @@ from pathlib import Path
 from clawteam.team.mailbox import MailboxManager
 from clawteam.team.manager import TeamManager
 from clawteam.team.models import MessageType
-from clawteam.team.plan import PlanManager
+from clawteam.team.plan import PlanManager, stage_launch_plan
 
 
 def _create_team(tmp_path: Path, monkeypatch, team_name: str) -> None:
@@ -32,10 +32,13 @@ def test_submit_plan_stores_under_team_directory(
 
     team_plan_path = tmp_path / "plans" / "alpha" / f"worker-{plan_id}.md"
     legacy_plan_path = tmp_path / "plans" / f"worker-{plan_id}.md"
+    event_log = mailbox.get_event_log(limit=1)
 
     assert team_plan_path.read_text(encoding="utf-8") == "team-scoped plan"
     assert not legacy_plan_path.exists()
     assert PlanManager.get_plan(plan_id, "worker", team_name="alpha") == "team-scoped plan"
+    assert event_log[0].plan_file == str(team_plan_path)
+    assert event_log[0].plan is None
 
 
 def test_get_plan_falls_back_to_legacy_flat_layout(
@@ -154,3 +157,40 @@ def test_cleanup_nonexistent_team_preserves_other_team_plans(
     assert (tmp_path / "teams" / "beta").exists()
     assert (tmp_path / "plans" / "beta" / f"worker-{beta_plan_id}.md").exists()
     assert legacy_beta.exists()
+
+
+def test_stage_launch_plan_copies_external_artifact_into_team_directory(
+    monkeypatch,
+    tmp_path: Path,
+):
+    _create_team(tmp_path, monkeypatch, "alpha")
+
+    source_plan = tmp_path / "workspace-plan.md"
+    source_plan.write_text("# Launch plan\nUse artifact-backed intake.\n", encoding="utf-8")
+
+    staged_path = stage_launch_plan("alpha", source_plan)
+
+    assert staged_path == tmp_path / "plans" / "alpha" / "launch-plan.md"
+    assert staged_path.read_text(encoding="utf-8") == source_plan.read_text(encoding="utf-8")
+
+
+def test_submit_plan_keeps_mailbox_event_artifact_first(
+    monkeypatch,
+    tmp_path: Path,
+):
+    _create_team(tmp_path, monkeypatch, "alpha")
+
+    mailbox = MailboxManager("alpha")
+    plan_id = PlanManager("alpha", mailbox).submit_plan(
+        agent_name="worker",
+        leader_name="leader",
+        plan_content="# Plan\nUse the artifact file.\n",
+        summary="artifact-backed plan",
+    )
+
+    [event] = mailbox.get_event_log(limit=1)
+    expected_path = tmp_path / "plans" / "alpha" / f"worker-{plan_id}.md"
+
+    assert event.plan_file == str(expected_path)
+    assert event.summary == "artifact-backed plan"
+    assert event.plan is None

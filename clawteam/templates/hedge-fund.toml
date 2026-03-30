@@ -14,11 +14,13 @@ Workflow:
 1. Create analysis tasks for each analyst via `clawteam task create {team_name} "Analyze [tickers]" -o [analyst]`
 2. Send task instructions to each analyst via `clawteam inbox send {team_name} [analyst] "Analyze ..."`
 3. Monitor progress via `clawteam board show {team_name}`
-4. Wait for risk-manager's consolidated risk report via `clawteam inbox receive {team_name}`
+4. Wait for risk-manager's structured risk update via `clawteam inbox peek {team_name} --agent {agent_name}`
 5. Make final investment decisions based on all analyst signals + risk assessment
-6. Output a final report with: ticker, action (buy/sell/hold), quantity, confidence, reasoning
+6. Send your draft position plan to risk-manager for an independent check:
+   `clawteam inbox room-update {team_name} risk-manager --update-kind final-decision --status completed --summary "Draft portfolio decision ready for risk validation" --final-delivery "[position plan path or memo]" --artifact-file [decision artifact] --next-action "Validate position limits, concentration, and risk guardrails"`
+7. Wait for risk-manager's independent validation via `clawteam inbox peek {team_name} --agent {agent_name}` before outputting the final report
 
-You must wait for ALL analysts to report before making decisions."""
+You must wait for ALL analysts to report before making decisions, and risk-manager must validate your final position plan before you publish it."""
 
 [[template.agents]]
 name = "buffett-analyst"
@@ -34,8 +36,8 @@ Your analysis framework:
 - Book value growth: CAGR and consistency
 
 Check your tasks: `clawteam task list {team_name} --owner {agent_name}`
-When done, send results to risk-manager:
-`clawteam inbox send {team_name} risk-manager "SIGNAL: [bullish|bearish|neutral] | CONFIDENCE: [0-100] | REASONING: [your analysis]"`
+When done, send results to risk-manager with a structured room update:
+`clawteam inbox room-update {team_name} risk-manager --update-kind analyst-signal --status completed --summary "SIGNAL: [bullish|bearish|neutral] | CONFIDENCE: [0-100]" --final-delivery "[analysis notes or artifact path]" --artifact-file [artifact path] --next-action "Fold this signal into the consolidated risk report"`
 Then update task status: `clawteam task update {team_name} [task-id] --status completed`"""
 
 [[template.agents]]
@@ -52,8 +54,8 @@ Your analysis framework:
 - Management vision and execution
 
 Check your tasks: `clawteam task list {team_name} --owner {agent_name}`
-When done, send results to risk-manager:
-`clawteam inbox send {team_name} risk-manager "SIGNAL: [bullish|bearish|neutral] | CONFIDENCE: [0-100] | REASONING: [your analysis]"`
+When done, send results to risk-manager with a structured room update:
+`clawteam inbox room-update {team_name} risk-manager --update-kind analyst-signal --status completed --summary "SIGNAL: [bullish|bearish|neutral] | CONFIDENCE: [0-100]" --final-delivery "[analysis notes or artifact path]" --artifact-file [artifact path] --next-action "Fold this signal into the consolidated risk report"`
 Then update task status: `clawteam task update {team_name} [task-id] --status completed`"""
 
 [[template.agents]]
@@ -70,8 +72,8 @@ Your analysis framework (weighted ensemble):
 - Statistical arbitrage (15%): Hurst exponent, skewness, kurtosis
 
 Check your tasks: `clawteam task list {team_name} --owner {agent_name}`
-When done, send results to risk-manager:
-`clawteam inbox send {team_name} risk-manager "SIGNAL: [bullish|bearish|neutral] | CONFIDENCE: [0-100] | REASONING: [your analysis]"`
+When done, send results to risk-manager with a structured room update:
+`clawteam inbox room-update {team_name} risk-manager --update-kind analyst-signal --status completed --summary "SIGNAL: [bullish|bearish|neutral] | CONFIDENCE: [0-100]" --final-delivery "[analysis notes or artifact path]" --artifact-file [artifact path] --next-action "Fold this signal into the consolidated risk report"`
 Then update task status: `clawteam task update {team_name} [task-id] --status completed`"""
 
 [[template.agents]]
@@ -89,8 +91,8 @@ Your analysis framework (4 dimensions):
 Signal = majority vote of 4 dimensions. Confidence = % of agreeing signals.
 
 Check your tasks: `clawteam task list {team_name} --owner {agent_name}`
-When done, send results to risk-manager:
-`clawteam inbox send {team_name} risk-manager "SIGNAL: [bullish|bearish|neutral] | CONFIDENCE: [0-100] | REASONING: [your analysis]"`
+When done, send results to risk-manager with a structured room update:
+`clawteam inbox room-update {team_name} risk-manager --update-kind analyst-signal --status completed --summary "SIGNAL: [bullish|bearish|neutral] | CONFIDENCE: [0-100]" --final-delivery "[analysis notes or artifact path]" --artifact-file [artifact path] --next-action "Fold this signal into the consolidated risk report"`
 Then update task status: `clawteam task update {team_name} [task-id] --status completed`"""
 
 [[template.agents]]
@@ -105,8 +107,8 @@ Your analysis framework:
 - Combined weighted signal with confidence score
 
 Check your tasks: `clawteam task list {team_name} --owner {agent_name}`
-When done, send results to risk-manager:
-`clawteam inbox send {team_name} risk-manager "SIGNAL: [bullish|bearish|neutral] | CONFIDENCE: [0-100] | REASONING: [your analysis]"`
+When done, send results to risk-manager with a structured room update:
+`clawteam inbox room-update {team_name} risk-manager --update-kind analyst-signal --status completed --summary "SIGNAL: [bullish|bearish|neutral] | CONFIDENCE: [0-100]" --final-delivery "[analysis notes or artifact path]" --artifact-file [artifact path] --next-action "Fold this signal into the consolidated risk report"`
 Then update task status: `clawteam task update {team_name} [task-id] --status completed`"""
 
 [[template.agents]]
@@ -116,15 +118,17 @@ task = """You are the Risk Manager. Collect all analyst signals and assess portf
 The team goal is: {goal}
 
 Workflow:
-1. Wait for signals from ALL 5 analysts via `clawteam inbox receive {team_name}`
+1. Wait for signals from ALL 5 analysts via `clawteam inbox peek {team_name} --agent {agent_name}`
 2. For each ticker, consolidate analyst signals (bullish/bearish/neutral + confidence)
 3. Compute risk metrics:
    - Volatility-adjusted position limits (low vol: 25% max, high vol: 10% max)
    - Correlation adjustment (high correlation: reduce exposure)
    - Maximum position size per ticker
-4. Send consolidated risk report to portfolio-manager:
-   `clawteam inbox send {team_name} portfolio-manager "RISK REPORT: [consolidated analysis with position limits]"`
-5. Update your task status when done
+4. Send a structured risk report to portfolio-manager:
+   `clawteam inbox room-update {team_name} portfolio-manager --update-kind risk-report --status completed --summary "Consolidated risk report ready" --final-delivery "[risk memo with position limits]" --artifact-file [risk artifact] --next-action "Draft the final portfolio decision using these guardrails"`
+5. After portfolio-manager shares the draft portfolio decision, validate it independently:
+   `clawteam inbox validate {team_name} portfolio-manager --maker-agent portfolio-manager --claim "Final portfolio decision respects the agreed risk limits and concentration guardrails" --evidence "[risk report trace]" --evidence "[position sizing or concentration check]" --verdict [pass|needs_follow_up] --follow-up "[required correction if any]"`
+6. Update your task status when done
 
 You MUST wait for all 5 analyst signals before sending your report."""
 

@@ -100,3 +100,45 @@ class TestBuildAgentPrompt:
         assert "Do not exit after the first task" in prompt
         assert "clawteam inbox receive my-team --agent dev" in prompt
         assert "clawteam lifecycle idle my-team" in prompt
+
+    def test_prompt_includes_launch_plan_guidance_for_leader(self):
+        prompt = build_agent_prompt(
+            agent_name="boss",
+            agent_id="id",
+            agent_type="leader",
+            team_name="my-team",
+            leader_name="boss",
+            task="task",
+            plan_artifact_path="/tmp/launch-plan.md",
+        )
+        assert "Launch Artifact" in prompt
+        assert "/tmp/launch-plan.md" in prompt
+        assert "Read this file before decomposing the work" in prompt
+
+    def test_prompt_tells_workers_to_prefer_leader_decomposition_for_launch_plan(self):
+        prompt = build_agent_prompt(
+            agent_name="dev",
+            agent_id="id",
+            agent_type="coder",
+            team_name="my-team",
+            leader_name="boss",
+            task="task",
+            plan_artifact_path="/tmp/launch-plan.md",
+        )
+        assert "Launch Artifact" in prompt
+        assert "/tmp/launch-plan.md" in prompt
+        assert "leader (boss) is expected to decompose from this artifact" in prompt
+
+    def test_prompt_includes_shared_project_guard_baseline(self):
+        prompt = build_agent_prompt(
+            agent_name="dev",
+            agent_id="id",
+            agent_type="coder",
+            team_name="my-team",
+            leader_name="boss",
+            task="task",
+        )
+        assert "Project Guard" in prompt
+        assert "maker must not certify their own work" in prompt
+        assert "Escalate to the leader" in prompt
+        assert "artifact pointers" in prompt

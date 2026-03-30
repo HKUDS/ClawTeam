@@ -14,10 +14,13 @@ Workflow:
 1. Assign review tasks to each specialist via `clawteam task create {team_name} "Review [aspect]" -o [reviewer]`
 2. Send the code context to each reviewer via `clawteam inbox send {team_name} [reviewer] "Please review ..."`
 3. Monitor progress via `clawteam board show {team_name}`
-4. Collect all review feedback via `clawteam inbox receive {team_name}`
+4. Collect structured specialist updates via `clawteam inbox peek {team_name} --agent {agent_name}`
 5. Synthesize findings into a unified review: critical issues, suggestions, and approval recommendation
+6. When the unified review is ready, send arch-reviewer a structured handoff:
+   `clawteam inbox room-update {team_name} arch-reviewer --update-kind final-review --status completed --summary "Unified review ready for independent validation" --final-delivery "[review memo or PR comment path]" --artifact-file [artifact path] --next-action "Validate that conclusions match specialist findings"`
+7. Wait for arch-reviewer's independent validation via `clawteam inbox peek {team_name} --agent {agent_name}` before publishing the final recommendation
 
-Wait for ALL reviewers before writing the final summary."""
+Wait for ALL reviewers before writing the final summary, and do not publish it until arch-reviewer has validated your consolidated review."""
 
 [[template.agents]]
 name = "security-reviewer"
@@ -34,8 +37,8 @@ Your checklist:
 - Race conditions that could be exploited
 
 Check your tasks: `clawteam task list {team_name} --owner {agent_name}`
-Send findings to lead-reviewer:
-`clawteam inbox send {team_name} lead-reviewer "SECURITY: [critical|warning|clean] | FINDINGS: [details]"`
+Send findings to lead-reviewer with a structured room update:
+`clawteam inbox room-update {team_name} lead-reviewer --update-kind security-review --status completed --summary "SECURITY: [critical|warning|clean]" --final-delivery "[findings summary or artifact path]" --artifact-file [artifact path] --next-action "Fold security findings into the unified review"`
 Then: `clawteam task update {team_name} [task-id] --status completed`"""
 
 [[template.agents]]
@@ -53,8 +56,8 @@ Your focus areas:
 - Concurrency issues (lock contention, thread safety)
 
 Check your tasks: `clawteam task list {team_name} --owner {agent_name}`
-Send findings to lead-reviewer:
-`clawteam inbox send {team_name} lead-reviewer "PERFORMANCE: [critical|warning|clean] | FINDINGS: [details]"`
+Send findings to lead-reviewer with a structured room update:
+`clawteam inbox room-update {team_name} lead-reviewer --update-kind performance-review --status completed --summary "PERFORMANCE: [critical|warning|clean]" --final-delivery "[findings summary or artifact path]" --artifact-file [artifact path] --next-action "Fold performance findings into the unified review"`
 Then: `clawteam task update {team_name} [task-id] --status completed`"""
 
 [[template.agents]]
@@ -72,8 +75,10 @@ Your focus areas:
 - Documentation completeness
 
 Check your tasks: `clawteam task list {team_name} --owner {agent_name}`
-Send findings to lead-reviewer:
-`clawteam inbox send {team_name} lead-reviewer "ARCHITECTURE: [critical|warning|clean] | FINDINGS: [details]"`
+Send findings to lead-reviewer with a structured room update:
+`clawteam inbox room-update {team_name} lead-reviewer --update-kind architecture-review --status completed --summary "ARCHITECTURE: [critical|warning|clean]" --final-delivery "[findings summary or artifact path]" --artifact-file [artifact path] --next-action "Fold architecture findings into the unified review"`
+When lead-reviewer shares the final review bundle, validate it independently:
+`clawteam inbox validate {team_name} lead-reviewer --maker-agent lead-reviewer --claim "Final review package matches the specialist findings and approval recommendation" --evidence "[trace from consolidated review]" --evidence "[supporting artifact or cited finding]" --verdict [pass|needs_follow_up] --follow-up "[required correction if any]"`
 Then: `clawteam task update {team_name} [task-id] --status completed`"""
 
 [[template.tasks]]

@@ -89,6 +89,16 @@ class MailboxManager:
         plan: str | None = None,
         last_task: str | None = None,
         status: str | None = None,
+        update_kind: str | None = None,
+        blocker: str | None = None,
+        final_delivery: str | None = None,
+        artifact_files: list[str] | None = None,
+        next_action: str | None = None,
+        maker_agent: str | None = None,
+        validation_claim: str | None = None,
+        validation_evidence: list[str] | None = None,
+        validation_verdict: str | None = None,
+        validation_follow_up: str | None = None,
     ) -> TeamMessage:
         from clawteam.team.manager import TeamManager
 
@@ -112,11 +122,107 @@ class MailboxManager:
             plan=plan,
             last_task=last_task,
             status=status,
+            update_kind=update_kind,
+            blocker=blocker,
+            final_delivery=final_delivery,
+            artifact_files=self._clean_items(artifact_files),
+            next_action=next_action,
+            maker_agent=maker_agent,
+            validation_claim=validation_claim,
+            validation_evidence=self._clean_items(validation_evidence),
+            validation_verdict=validation_verdict,
+            validation_follow_up=validation_follow_up,
         )
         data = msg.model_dump_json(indent=2, by_alias=True, exclude_none=True).encode("utf-8")
         self._transport.deliver(delivery_target, data)
         self._log_event(msg)
         return msg
+
+    @staticmethod
+    def _clean_items(items: list[str] | None) -> list[str] | None:
+        if not items:
+            return None
+        cleaned = [item.strip() for item in items if item and item.strip()]
+        return cleaned or None
+
+    def send_room_update(
+        self,
+        from_agent: str,
+        to: str,
+        *,
+        content: str | None = None,
+        summary: str | None = None,
+        status: str | None = None,
+        blocker: str | None = None,
+        final_delivery: str | None = None,
+        artifact_files: list[str] | None = None,
+        next_action: str | None = None,
+        update_kind: str | None = None,
+        request_id: str | None = None,
+        key: str | None = None,
+    ) -> TeamMessage:
+        return self.send(
+            from_agent=from_agent,
+            to=to,
+            content=content,
+            msg_type=MessageType.room_update,
+            request_id=request_id,
+            key=key,
+            summary=summary,
+            status=status,
+            blocker=blocker,
+            final_delivery=final_delivery,
+            artifact_files=artifact_files,
+            next_action=next_action,
+            update_kind=update_kind,
+        )
+
+    def send_validation_result(
+        self,
+        from_agent: str,
+        to: str,
+        *,
+        maker_agent: str,
+        claim: str,
+        evidence: list[str],
+        verdict: str,
+        follow_up: str | None = None,
+        content: str | None = None,
+        summary: str | None = None,
+        artifact_files: list[str] | None = None,
+        request_id: str | None = None,
+        key: str | None = None,
+    ) -> TeamMessage:
+        validator = from_agent.strip()
+        maker = maker_agent.strip()
+        if not validator or not maker:
+            raise ValueError("validator and maker must both be set")
+        if validator == maker:
+            raise ValueError("validator and maker must differ")
+
+        cleaned_evidence = self._clean_items(evidence)
+        if not claim.strip():
+            raise ValueError("validation claim is required")
+        if not cleaned_evidence:
+            raise ValueError("validation evidence is required")
+        if not verdict.strip():
+            raise ValueError("validation verdict is required")
+
+        return self.send(
+            from_agent=validator,
+            to=to,
+            content=content,
+            msg_type=MessageType.validation_result,
+            request_id=request_id,
+            key=key,
+            summary=summary,
+            artifact_files=artifact_files,
+            maker_agent=maker,
+            validation_claim=claim.strip(),
+            validation_evidence=cleaned_evidence,
+            validation_verdict=verdict.strip(),
+            validation_follow_up=follow_up.strip() if follow_up and follow_up.strip() else None,
+        )
 
     def broadcast(
         self,

@@ -22,8 +22,11 @@ Workflow:
    - key risks
    - execution sequence
    - next steps
+7. Send the draft recommendation to risk-mapper for independent validation:
+   `clawteam inbox room-update {team_name} risk-mapper --update-kind final-strategy --status completed --summary "Draft recommendation ready for independent validation" --final-delivery "[strategy memo path]" --artifact-file [artifact path] --next-action "Validate that the recommendation respects the surfaced risks and sequencing"`
+8. Wait for risk-mapper's independent validation via `clawteam inbox peek {team_name} --agent {agent_name}` before finalizing
 
-You must not finalize the recommendation until the decision-editor has delivered the memo."""
+You must not finalize the recommendation until the decision-editor has delivered the memo and risk-mapper has validated the final recommendation."""
 
 [[template.agents]]
 name = "systems-analyst"
@@ -39,8 +42,8 @@ Your focus:
 - likely bottlenecks
 
 Check your tasks: `clawteam task list {team_name} --owner {agent_name}`
-Send findings to decision-editor:
-`clawteam inbox send {team_name} decision-editor "SYSTEMS: [key constraints, tradeoffs, and implications]"`
+Send findings to decision-editor with a structured room update:
+`clawteam inbox room-update {team_name} decision-editor --update-kind systems-analysis --status completed --summary "SYSTEMS: [key constraints and tradeoffs]" --final-delivery "[systems notes or artifact path]" --artifact-file [artifact path] --next-action "Incorporate system constraints into the decision memo"`
 Then update task status: `clawteam task update {team_name} [task-id] --status completed`"""
 
 [[template.agents]]
@@ -57,8 +60,8 @@ Your focus:
 - resource and coordination needs
 
 Check your tasks: `clawteam task list {team_name} --owner {agent_name}`
-Send findings to decision-editor:
-`clawteam inbox send {team_name} decision-editor "DELIVERY: [staged plan, priorities, and execution path]"`
+Send findings to decision-editor with a structured room update:
+`clawteam inbox room-update {team_name} decision-editor --update-kind delivery-plan --status completed --summary "DELIVERY: [staged plan and priorities]" --final-delivery "[delivery plan artifact]" --artifact-file [artifact path] --next-action "Incorporate sequencing into the decision memo"`
 Then update task status: `clawteam task update {team_name} [task-id] --status completed`"""
 
 [[template.agents]]
@@ -76,8 +79,10 @@ Your focus:
 - what should stop or delay execution
 
 Check your tasks: `clawteam task list {team_name} --owner {agent_name}`
-Send findings to decision-editor:
-`clawteam inbox send {team_name} decision-editor "RISK: [risks, blockers, assumptions, and mitigations]"`
+Send findings to decision-editor with a structured room update:
+`clawteam inbox room-update {team_name} decision-editor --update-kind risk-map --status completed --summary "RISK: [major blockers and mitigations]" --final-delivery "[risk map artifact]" --artifact-file [artifact path] --next-action "Incorporate risks into the decision memo"`
+When strategy-lead shares the final recommendation, validate it independently:
+`clawteam inbox validate {team_name} strategy-lead --maker-agent strategy-lead --claim "Final recommendation reflects the surfaced risks, blockers, and sequencing constraints" --evidence "[risk map trace]" --evidence "[recommendation artifact]" --verdict [pass|needs_follow_up] --follow-up "[required correction if any]"`
 Then update task status: `clawteam task update {team_name} [task-id] --status completed`"""
 
 [[template.agents]]
@@ -87,15 +92,15 @@ task = """You are the Decision Editor. Consolidate specialist outputs into a dec
 The team goal is: {goal}
 
 Workflow:
-1. Wait for messages from systems-analyst, delivery-planner, and risk-mapper via `clawteam inbox receive {team_name}`
+1. Wait for structured updates from systems-analyst, delivery-planner, and risk-mapper via `clawteam inbox peek {team_name} --agent {agent_name}`
 2. Consolidate them into:
    - problem framing
    - options considered
    - major risks
    - execution sequence
    - unresolved assumptions
-3. Send the memo to strategy-lead:
-   `clawteam inbox send {team_name} strategy-lead "MEMO: [decision-ready strategy memo]"`
+3. Send the memo to strategy-lead with a structured room update:
+   `clawteam inbox room-update {team_name} strategy-lead --update-kind strategy-memo --status completed --summary "Decision-ready memo prepared" --final-delivery "[strategy memo path]" --artifact-file [artifact path] --next-action "Draft the final recommendation and request risk validation"`
 4. Update your task status when done
 
 Do not recommend the final path yourself. Your job is to turn specialist output into a decision-ready memo for the strategy-lead."""

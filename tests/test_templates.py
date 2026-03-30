@@ -132,7 +132,11 @@ class TestLoadBuiltinTemplate:
             if agent.name == "decision-editor":
                 continue
             assert "decision-editor" in agent.task
-            assert "strategy-lead" not in agent.task
+            if agent.name == "risk-mapper":
+                assert "clawteam inbox validate" in agent.task
+                assert "strategy-lead" in agent.task
+            else:
+                assert "strategy-lead" not in agent.task
 
     def test_strategy_room_decision_editor_routes_to_strategy_lead(self):
         tmpl = load_template("strategy-room")
@@ -144,6 +148,38 @@ class TestLoadBuiltinTemplate:
         tmpl = load_template("strategy-room")
         assert "Wait for the decision-editor's strategy memo" in tmpl.leader.task
         assert "supporting specialist outputs" not in tmpl.leader.task
+
+    @pytest.mark.parametrize(
+        ("template_name", "validator_name", "maker_name", "leader_wait_phrase"),
+        [
+            ("code-review", "arch-reviewer", "lead-reviewer", "Wait for arch-reviewer's independent validation"),
+            ("hedge-fund", "risk-manager", "portfolio-manager", "Wait for risk-manager's independent validation"),
+            (
+                "research-paper",
+                "methodology-designer",
+                "principal-investigator",
+                "Wait for methodology-designer's independent validation",
+            ),
+            ("software-dev", "qa-engineer", "tech-lead", "Wait for qa-engineer's independent validation"),
+            ("strategy-room", "risk-mapper", "strategy-lead", "Wait for risk-mapper's independent validation"),
+        ],
+    )
+    def test_active_hk_templates_include_structured_update_and_validation_contract(
+        self,
+        template_name,
+        validator_name,
+        maker_name,
+        leader_wait_phrase,
+    ):
+        tmpl = load_template(template_name)
+        combined_task_text = "\n".join([tmpl.leader.task, *(agent.task for agent in tmpl.agents)])
+        validator = next(agent for agent in tmpl.agents if agent.name == validator_name)
+
+        assert "clawteam inbox room-update" in combined_task_text
+        assert "clawteam inbox validate" in combined_task_text
+        assert leader_wait_phrase in tmpl.leader.task
+        assert validator_name != maker_name
+        assert f"--maker-agent {maker_name}" in validator.task
 
 
 class TestLoadTemplateNotFound:

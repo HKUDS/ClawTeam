@@ -60,3 +60,10 @@ def team_member_add(
             user=user,
         )
     )
+
+
+def team_cleanup(team_name: str) -> dict:
+    """Delete a team and its local state."""
+    if TeamManager.cleanup(team_name):
+        return {"status": "cleaned", "team": team_name}
+    return {"status": "not_found", "team": team_name}

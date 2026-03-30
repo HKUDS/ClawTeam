@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 
 from clawteam.team.models import MessageType, TeamMessage
 from clawteam.team.router import RuntimeRouter
@@ -33,6 +34,79 @@ def test_runtime_router_normalizes_team_message_to_runtime_envelope(tmp_path, mo
     assert envelope.summary == "Auth module complete."
     assert "summary: 12 tests passed" in envelope.evidence
     assert "planFile: /tmp/plan.md" in envelope.evidence
+
+
+def test_runtime_router_stages_large_message_content_as_context_artifact(tmp_path, monkeypatch):
+    monkeypatch.setenv("CLAWTEAM_DATA_DIR", str(tmp_path))
+    router = RuntimeRouter(team_name="demo", agent_name="worker")
+    long_content = (
+        "Need deeper review of the migration plan. "
+        + "Please inspect the branch diff, failing tests, and rollout checklist. " * 12
+    ).strip()
+    message = TeamMessage(
+        type=MessageType.message,
+        from_agent="leader",
+        to="worker",
+        content=long_content,
+    )
+
+    envelope = router.normalize_message(message)
+
+    context_file_entry = next(item for item in envelope.evidence if item.startswith("contextFile: "))
+    context_path = context_file_entry.split(": ", 1)[1]
+
+    assert envelope.summary != long_content
+    assert len(envelope.summary) < len(long_content)
+    assert envelope.summary.startswith("Need deeper review of the migration plan.")
+    assert context_path.endswith(".md")
+    assert Path(context_path).is_file()
+    assert "Please inspect the branch diff" in Path(context_path).read_text(encoding="utf-8")
+
+
+def test_runtime_router_compacts_room_update_fields_into_summary_and_evidence(tmp_path, monkeypatch):
+    monkeypatch.setenv("CLAWTEAM_DATA_DIR", str(tmp_path))
+    router = RuntimeRouter(team_name="demo", agent_name="leader")
+    message = TeamMessage(
+        type=MessageType.room_update,
+        from_agent="worker",
+        to="leader",
+        status="blocked",
+        blocker="Waiting on checker",
+        final_delivery="Patch prepared",
+        artifact_files=["/tmp/patch.diff"],
+        next_action="Assign reviewer",
+        update_kind="execution",
+    )
+
+    envelope = router.normalize_message(message)
+
+    assert envelope.summary == "worker room update: execution; status=blocked; blocker=Waiting on checker"
+    assert "finalDelivery: Patch prepared" in envelope.evidence
+    assert "artifactFiles: /tmp/patch.diff" in envelope.evidence
+    assert envelope.recommended_next_action == "Assign reviewer"
+
+
+def test_runtime_router_compacts_validation_result_fields(tmp_path, monkeypatch):
+    monkeypatch.setenv("CLAWTEAM_DATA_DIR", str(tmp_path))
+    router = RuntimeRouter(team_name="demo", agent_name="leader")
+    message = TeamMessage(
+        type=MessageType.validation_result,
+        from_agent="checker",
+        to="leader",
+        maker_agent="worker",
+        validation_claim="Patch is ready to land",
+        validation_evidence=["9 targeted tests passed", "artifact=/tmp/report.md"],
+        validation_verdict="needs_follow_up",
+        validation_follow_up="Fix flaky teardown and re-run",
+    )
+
+    envelope = router.normalize_message(message)
+
+    assert envelope.summary == "checker validation for worker: needs_follow_up"
+    assert "validationClaim: Patch is ready to land" in envelope.evidence
+    assert "validationEvidence: 9 targeted tests passed | artifact=/tmp/report.md" in envelope.evidence
+    assert "makerAgent: worker" in envelope.evidence
+    assert envelope.recommended_next_action == "Fix flaky teardown and re-run"
 
 
 def test_default_routing_policy_throttles_same_source_target_and_tracks_pending_state(

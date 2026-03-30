@@ -14,12 +14,15 @@ Workflow:
 1. Break the research topic into sub-tasks and assign to team members
 2. Create tasks: `clawteam task create {team_name} "[task]" -o [researcher]`
 3. Send instructions: `clawteam inbox send {team_name} [researcher] "[instructions]"`
-4. Wait for all team members to complete their sections
+4. Wait for structured section updates via `clawteam inbox peek {team_name} --agent {agent_name}`
 5. Synthesize findings into a coherent paper with: abstract, introduction, related work,
    methodology, results, discussion, conclusion
 6. Ensure proper citations and consistent writing style throughout
+7. Send the draft paper to methodology-designer for an independent validation pass:
+   `clawteam inbox room-update {team_name} methodology-designer --update-kind final-paper --status completed --summary "Draft paper ready for independent validation" --final-delivery "[paper draft path]" --artifact-file [paper artifact] --next-action "Validate section coverage, citation traceability, and reproducibility hooks"`
+8. Wait for methodology-designer's independent validation via `clawteam inbox peek {team_name} --agent {agent_name}` before delivering the final paper
 
-Wait for ALL members before writing the final synthesis."""
+Wait for ALL members before writing the final synthesis, and do not deliver the final paper until methodology-designer has validated it."""
 
 [[template.agents]]
 name = "literature-surveyor"
@@ -35,8 +38,8 @@ Your responsibilities:
 - Note any contradictory findings across papers
 
 Check your tasks: `clawteam task list {team_name} --owner {agent_name}`
-Send your literature review to principal-investigator:
-`clawteam inbox send {team_name} principal-investigator "LITERATURE: [your related work section]"`
+Send your literature review to principal-investigator with a structured room update:
+`clawteam inbox room-update {team_name} principal-investigator --update-kind literature --status completed --summary "Related work section ready" --final-delivery "[literature review path]" --artifact-file [artifact path] --next-action "Integrate related work into the draft paper"`
 Then: `clawteam task update {team_name} [task-id] --status completed`"""
 
 [[template.agents]]
@@ -53,8 +56,10 @@ Your responsibilities:
 - Include pseudocode or algorithm descriptions where appropriate
 
 Check your tasks: `clawteam task list {team_name} --owner {agent_name}`
-Send your methodology to principal-investigator:
-`clawteam inbox send {team_name} principal-investigator "METHODOLOGY: [your methodology section]"`
+Send your methodology to principal-investigator with a structured room update:
+`clawteam inbox room-update {team_name} principal-investigator --update-kind methodology --status completed --summary "Methodology section ready" --final-delivery "[methodology section path]" --artifact-file [artifact path] --next-action "Integrate reproducibility details into the draft paper"`
+When principal-investigator shares the draft paper, validate it independently:
+`clawteam inbox validate {team_name} principal-investigator --maker-agent principal-investigator --claim "Draft paper has section coverage, citation traceability, and enough methodological detail for review" --evidence "[methodology section trace]" --evidence "[paper draft or artifact path]" --verdict [pass|needs_follow_up] --follow-up "[required correction if any]"`
 Then: `clawteam task update {team_name} [task-id] --status completed`"""
 
 [[template.agents]]
@@ -71,8 +76,8 @@ Your responsibilities:
 - Highlight limitations and suggest future work directions
 
 Check your tasks: `clawteam task list {team_name} --owner {agent_name}`
-Send your analysis to principal-investigator:
-`clawteam inbox send {team_name} principal-investigator "RESULTS: [your results and discussion sections]"`
+Send your analysis to principal-investigator with a structured room update:
+`clawteam inbox room-update {team_name} principal-investigator --update-kind results --status completed --summary "Results and discussion section ready" --final-delivery "[results section path]" --artifact-file [artifact path] --next-action "Integrate empirical findings into the draft paper"`
 Then: `clawteam task update {team_name} [task-id] --status completed`"""
 
 [[template.tasks]]

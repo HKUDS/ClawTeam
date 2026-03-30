@@ -116,6 +116,50 @@ class TestTeamMessage:
         assert "feedback" not in dumped
         assert "assignedName" not in dumped
 
+    def test_structured_room_update_fields_use_aliases(self):
+        msg = TeamMessage(
+            type=MessageType.room_update,
+            from_agent="worker",
+            to="leader",
+            status="blocked",
+            blocker="Waiting on reviewer",
+            final_delivery="Patch staged",
+            artifact_files=["/tmp/report.md"],
+            next_action="Reassign reviewer",
+            update_kind="execution",
+        )
+
+        dumped = json.loads(msg.model_dump_json(by_alias=True, exclude_none=True))
+
+        assert dumped["type"] == "room_update"
+        assert dumped["updateKind"] == "execution"
+        assert dumped["artifactFiles"] == ["/tmp/report.md"]
+        assert dumped["finalDelivery"] == "Patch staged"
+        assert dumped["nextAction"] == "Reassign reviewer"
+
+    def test_structured_validation_fields_roundtrip(self):
+        msg = TeamMessage(
+            type=MessageType.validation_result,
+            from_agent="reviewer",
+            to="leader",
+            maker_agent="worker",
+            validation_claim="Feature is complete",
+            validation_evidence=["8 tests passed", "manual check"],
+            validation_verdict="pass",
+            validation_follow_up="Ship it",
+        )
+
+        dumped = json.loads(msg.model_dump_json(by_alias=True, exclude_none=True))
+        restored = TeamMessage.model_validate(dumped)
+
+        assert dumped["makerAgent"] == "worker"
+        assert dumped["validationClaim"] == "Feature is complete"
+        assert dumped["validationEvidence"] == ["8 tests passed", "manual check"]
+        assert dumped["validationVerdict"] == "pass"
+        assert dumped["validationFollowUp"] == "Ship it"
+        assert restored.maker_agent == "worker"
+        assert restored.validation_verdict == "pass"
+
 
 class TestEnums:
     def test_task_status_values(self):
@@ -133,6 +177,8 @@ class TestEnums:
         assert MessageType.broadcast.value == "broadcast"
         assert MessageType.join_request.value == "join_request"
         assert MessageType.idle.value == "idle"
+        assert MessageType.room_update.value == "room_update"
+        assert MessageType.validation_result.value == "validation_result"
 
     def test_task_priority_values(self):
         assert TaskPriority.low.value == "low"

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from typer.testing import CliRunner
 
 from clawteam.cli.commands import app
@@ -214,6 +216,114 @@ def test_task_cli_accepts_agent_alias_for_owner(tmp_path):
     )
     assert list_result.exit_code == 0
     assert "important work" in list_result.output
+
+
+def test_inbox_room_update_cli_sends_structured_message(tmp_path):
+    runner = CliRunner()
+    env = {
+        "HOME": str(tmp_path),
+        "CLAWTEAM_DATA_DIR": str(tmp_path / ".clawteam"),
+        "CLAWTEAM_AGENT_ID": "worker001",
+        "CLAWTEAM_AGENT_NAME": "worker",
+    }
+
+    TeamManager.create_team(name="demo", leader_name="leader", leader_id="leader001")
+    TeamManager.add_member("demo", "worker", "worker001")
+
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "inbox",
+            "room-update",
+            "demo",
+            "leader",
+            "--status",
+            "blocked",
+            "--blocker",
+            "Waiting on checker",
+            "--final-delivery",
+            "Patch prepared",
+            "--artifact-file",
+            "/tmp/patch.diff",
+            "--next-action",
+            "Assign reviewer",
+            "--update-kind",
+            "execution",
+        ],
+        env=env,
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["type"] == "room_update"
+    assert payload["status"] == "blocked"
+    assert payload["artifactFiles"] == ["/tmp/patch.diff"]
+    assert payload["nextAction"] == "Assign reviewer"
+
+
+def test_inbox_peek_human_output_shows_structured_room_update_summary(tmp_path):
+    runner = CliRunner()
+    env = {
+        "HOME": str(tmp_path),
+        "CLAWTEAM_DATA_DIR": str(tmp_path / ".clawteam"),
+        "CLAWTEAM_AGENT_ID": "leader001",
+        "CLAWTEAM_AGENT_NAME": "leader",
+    }
+
+    TeamManager.create_team(name="demo", leader_name="leader", leader_id="leader001")
+    TeamManager.add_member("demo", "worker", "worker001")
+
+    mailbox = MailboxManager("demo")
+    mailbox.send_room_update(
+        from_agent="worker",
+        to="leader",
+        status="blocked",
+        blocker="Waiting on checker",
+        update_kind="execution",
+    )
+
+    result = runner.invoke(app, ["inbox", "peek", "demo", "--agent", "leader"], env=env)
+
+    assert result.exit_code == 0
+    assert "room_update" in result.output
+    assert "execution; status=blocked;" in result.output
+    assert "blocker=Waiting on checker" in result.output
+
+
+def test_inbox_validate_cli_rejects_same_maker_and_validator(tmp_path):
+    runner = CliRunner()
+    env = {
+        "HOME": str(tmp_path),
+        "CLAWTEAM_DATA_DIR": str(tmp_path / ".clawteam"),
+        "CLAWTEAM_AGENT_ID": "worker001",
+        "CLAWTEAM_AGENT_NAME": "worker",
+    }
+
+    TeamManager.create_team(name="demo", leader_name="leader", leader_id="leader001")
+    TeamManager.add_member("demo", "worker", "worker001")
+
+    result = runner.invoke(
+        app,
+        [
+            "inbox",
+            "validate",
+            "demo",
+            "leader",
+            "--maker-agent",
+            "worker",
+            "--claim",
+            "Patch is ready",
+            "--evidence",
+            "8 tests passed",
+            "--verdict",
+            "pass",
+        ],
+        env=env,
+    )
+
+    assert result.exit_code == 1
+    assert "must differ" in result.output
 
 
 def test_task_cli_rejects_circular_dependencies(tmp_path):

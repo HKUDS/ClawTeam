@@ -6,8 +6,11 @@ import json
 from datetime import datetime
 
 from clawteam.spawn.tmux_backend import TmuxBackend
+from clawteam.team.context_artifacts import stage_context_artifact, summarize_context_text
 from clawteam.team.models import MessageType, TeamMessage
 from clawteam.team.routing_policy import DefaultRoutingPolicy, RouteDecision, RuntimeEnvelope
+
+_RUNTIME_INLINE_SUMMARY_LIMIT = 500
 
 
 class RuntimeRouter:
@@ -33,23 +36,69 @@ class RuntimeRouter:
         target = message.to or self.agent_name
         channel = "team" if message.type == MessageType.broadcast else "direct"
         priority = self._priority_for_message(message)
+        content = (message.content or "").strip()
+        message_summary = (message.summary or "").strip()
+        context_artifact_path = ""
+        if content and len(content) > _RUNTIME_INLINE_SUMMARY_LIMIT:
+            context_artifact_path = str(
+                stage_context_artifact(
+                    self.team_name,
+                    source,
+                    "runtime-note",
+                    content,
+                )
+            )
         evidence = []
-        if message.summary:
-            evidence.append(f"summary: {message.summary}")
+        if message_summary:
+            evidence.append(f"summary: {message_summary}")
         if message.plan_file:
             evidence.append(f"planFile: {message.plan_file}")
+        if context_artifact_path:
+            evidence.append(f"contextFile: {context_artifact_path}")
         if message.status:
             evidence.append(f"status: {message.status}")
+        if message.update_kind:
+            evidence.append(f"updateKind: {message.update_kind}")
+        if message.blocker:
+            evidence.append(f"blocker: {message.blocker}")
+        if message.final_delivery:
+            evidence.append(f"finalDelivery: {message.final_delivery}")
+        if message.artifact_files:
+            evidence.append(f"artifactFiles: {' | '.join(message.artifact_files)}")
+        if message.next_action:
+            evidence.append(f"nextAction: {message.next_action}")
         if message.last_task:
             evidence.append(f"lastTask: {message.last_task}")
         if message.reason:
             evidence.append(f"reason: {message.reason}")
         if message.feedback:
             evidence.append(f"feedback: {message.feedback}")
+        if message.maker_agent:
+            evidence.append(f"makerAgent: {message.maker_agent}")
+        if message.validation_claim:
+            evidence.append(f"validationClaim: {message.validation_claim}")
+        if message.validation_evidence:
+            evidence.append(f"validationEvidence: {' | '.join(message.validation_evidence)}")
+        if message.validation_verdict:
+            evidence.append(f"validationVerdict: {message.validation_verdict}")
+        if message.validation_follow_up:
+            evidence.append(f"validationFollowUp: {message.validation_follow_up}")
         if message.request_id:
             evidence.append(f"requestId: {message.request_id}")
 
-        summary = (message.content or "").strip() or f"{message.type.value} from {source}"
+        structured_summary = self._structured_summary(message, source)
+        if structured_summary and message_summary:
+            summary = message_summary
+        elif structured_summary:
+            summary = structured_summary
+        elif content and not context_artifact_path:
+            summary = content
+        elif content:
+            summary = message_summary or summarize_context_text(content)
+        elif message_summary:
+            summary = message_summary
+        else:
+            summary = f"{message.type.value} from {source}"
         payload = json.loads(message.model_dump_json(by_alias=True, exclude_none=True))
 
         return RuntimeEnvelope(
@@ -119,8 +168,35 @@ class RuntimeRouter:
 
     @staticmethod
     def _recommended_next_action(message: TeamMessage) -> str | None:
+        if message.next_action:
+            return message.next_action
+        if message.type == MessageType.validation_result and message.validation_follow_up:
+            return message.validation_follow_up
         if message.type == MessageType.plan_approval_request:
             return "Review the plan and respond with an approval decision."
         if message.type == MessageType.idle and message.last_task:
             return f"Check blocker status for {message.last_task}."
+        return None
+
+    @staticmethod
+    def _structured_summary(message: TeamMessage, source: str) -> str | None:
+        if message.type == MessageType.room_update:
+            parts: list[str] = []
+            if message.update_kind:
+                parts.append(message.update_kind)
+            if message.status:
+                parts.append(f"status={message.status}")
+            if message.blocker:
+                parts.append(f"blocker={message.blocker}")
+            if parts:
+                return f"{source} room update: {'; '.join(parts)}"
+            return f"{source} room update"
+
+        if message.type == MessageType.validation_result:
+            maker = message.maker_agent or "unknown maker"
+            if message.validation_verdict:
+                return f"{source} validation for {maker}: {message.validation_verdict}"
+            if message.validation_claim:
+                return f"{source} validation for {maker}"
+
         return None
