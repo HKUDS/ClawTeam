@@ -430,6 +430,10 @@ ClawTeam은 셸 명령을 실행할 수 있는 **어떤 CLI 에이전트**와도
 | [Codex](https://openai.com/codex) | `clawteam spawn tmux codex --team ...` | ✅ 완전 지원 |
 | [OpenClaw](https://github.com/openclaw/openclaw) | `clawteam spawn tmux openclaw --team ...` | ✅ 완전 지원 |
 | [nanobot](https://github.com/HKUDS/nanobot) | `clawteam spawn tmux nanobot --team ...` | ✅ 완전 지원 |
+| [Qwen Code](https://github.com/QwenLM/qwen-code) | `clawteam spawn tmux qwen --team ...` | 🔮 실험적 |
+| [pi](https://github.com/mariozechner/pi-coding-agent) | `clawteam spawn tmux pi --team ...` | 🔮 실험적 |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | `clawteam spawn tmux gemini --team ...` | 🔮 실험적 |
+| [OpenCode](https://github.com/opencode-ai/opencode) | `clawteam spawn tmux opencode --team ...` | 🔮 실험적 |
 | [Cursor](https://cursor.com) | `clawteam spawn subprocess cursor --team ...` | 🔮 실험적 |
 | Custom scripts | `clawteam spawn subprocess python --team ...` | ✅ 완전 지원 |
 
