@@ -54,7 +54,9 @@ class BoardHandler(BaseHTTPRequestHandler):
             return False
         if "/" in team_name or "\\" in team_name:
             return False
-        if team_name in {".", ".."}:
+        if any(part in {".", ".."} for part in PurePosixPath(team_name).parts):
+            return False
+        if any(part in {".", ".."} for part in PureWindowsPath(team_name).parts):
             return False
         if PurePosixPath(team_name).is_absolute() or PureWindowsPath(team_name).is_absolute():
             return False
