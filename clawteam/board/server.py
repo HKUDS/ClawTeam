@@ -196,6 +196,25 @@ class BoardHandler(BaseHTTPRequestHandler):
                 else:
                     content_length = None
 
+                if content_length is None:
+                    buffered = bytearray()
+                    while True:
+                        chunk = resp.read(self.proxy_chunk_size)
+                        if not chunk:
+                            break
+                        buffered.extend(chunk)
+                        if len(buffered) > self.proxy_max_bytes:
+                            self.send_error(413, "Response too large")
+                            return
+
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/plain; charset=utf-8")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.send_header("Content-Length", str(len(buffered)))
+                    self.end_headers()
+                    self.wfile.write(buffered)
+                    return
+
                 self.send_response(200)
                 self.send_header("Content-Type", "text/plain; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -203,15 +222,10 @@ class BoardHandler(BaseHTTPRequestHandler):
                     self.send_header("Content-Length", str(content_length))
                 self.end_headers()
 
-                total = 0
                 while True:
                     chunk = resp.read(self.proxy_chunk_size)
                     if not chunk:
                         break
-                    total += len(chunk)
-                    if total > self.proxy_max_bytes:
-                        self.send_error(413, "Response too large")
-                        return
                     self.wfile.write(chunk)
         except TimeoutError:
             self.send_error(504, "Proxy request timed out")

@@ -380,5 +380,43 @@ def test_serve_proxy_streams_chunks_without_content_length(monkeypatch):
     handler._serve_proxy("https://example.com/chunked.txt")
 
     assert status["code"] == 200
-    assert ("Content-Length", "6") not in headers
+    assert ("Content-Length", "6") in headers
     assert handler.wfile.getvalue() == b"abcdef"
+
+
+def test_serve_proxy_returns_413_for_oversized_chunked_response(monkeypatch):
+    handler = object.__new__(BoardHandler)
+    handler.proxy_timeout_seconds = 1
+    handler.proxy_max_bytes = 5
+    handler.proxy_chunk_size = 4
+    handler.wfile = io.BytesIO()
+
+    captured = {"statuses": []}
+    handler.send_error = lambda code, msg=None: captured.setdefault("error", (code, msg))
+    handler.send_response = lambda code: captured["statuses"].append(code)
+    handler.send_header = lambda name, value: None
+    handler.end_headers = lambda: None
+
+    class FakeResponse:
+        def __init__(self):
+            self.headers = {}
+            self._chunks = [b"abcd", b"ef", b""]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self, size=-1):
+            return self._chunks.pop(0)
+
+    monkeypatch.setattr(
+        "clawteam.board.server.urllib.request.urlopen",
+        lambda req, timeout=None: FakeResponse(),
+    )
+
+    handler._serve_proxy("https://example.com/chunked-large.txt")
+
+    assert captured["error"] == (413, "Response too large")
+    assert captured["statuses"] == []
