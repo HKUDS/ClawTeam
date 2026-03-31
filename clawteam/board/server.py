@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import socket
 import threading
 import time
 import urllib.request
@@ -14,6 +15,9 @@ from urllib.parse import parse_qs, urlparse
 from clawteam.board.collector import BoardCollector
 
 _STATIC_DIR = Path(__file__).parent / "static"
+_PROXY_TIMEOUT_SECONDS = 10
+_PROXY_MAX_BYTES = 2 * 1024 * 1024
+_PROXY_CHUNK_SIZE = 64 * 1024
 
 
 @dataclass
@@ -47,6 +51,9 @@ class BoardHandler(BaseHTTPRequestHandler):
     default_team: str = ""
     interval: float = 2.0
     team_cache: TeamSnapshotCache
+    proxy_timeout_seconds: float = _PROXY_TIMEOUT_SECONDS
+    proxy_max_bytes: int = _PROXY_MAX_BYTES
+    proxy_chunk_size: int = _PROXY_CHUNK_SIZE
 
     def do_GET(self):
         path = self.path.split("?")[0]
@@ -73,30 +80,7 @@ class BoardHandler(BaseHTTPRequestHandler):
             if not target_url:
                 self.send_error(400, "URL required")
                 return
-            try:
-                # If github URL, convert to api.github.com/repos/.../readme
-                if "github.com" in target_url and "raw.githubusercontent.com" not in target_url:
-                    parsed = urlparse(target_url)
-                    parts = [p for p in parsed.path.split("/") if p]
-                    if len(parts) == 2:
-                        api_url = f"https://api.github.com/repos/{parts[0]}/{parts[1]}/readme"
-                        req = urllib.request.Request(api_url, headers={"User-Agent": "ClawTeam-Server"})
-                        with urllib.request.urlopen(req) as resp:
-                            data = json.loads(resp.read().decode())
-                            target_url = data.get("download_url", target_url)
-                    else:
-                        target_url = target_url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
-
-                req = urllib.request.Request(target_url, headers={"User-Agent": "ClawTeam-Server"})
-                with urllib.request.urlopen(req) as resp:
-                    content = resp.read()
-                    self.send_response(200)
-                    self.send_header("Content-Type", "text/plain; charset=utf-8")
-                    self.send_header("Access-Control-Allow-Origin", "*")
-                    self.end_headers()
-                    self.wfile.write(content)
-            except Exception as e:
-                self.send_error(500, str(e))
+            self._serve_proxy(target_url)
         else:
             self.send_error(404)
 
@@ -178,6 +162,68 @@ class BoardHandler(BaseHTTPRequestHandler):
                 time.sleep(self.interval)
         except (BrokenPipeError, ConnectionResetError, OSError):
             pass
+
+    def _resolve_proxy_url(self, target_url: str) -> str:
+        # If github URL, convert to api.github.com/repos/.../readme
+        if "github.com" in target_url and "raw.githubusercontent.com" not in target_url:
+            parsed = urlparse(target_url)
+            parts = [p for p in parsed.path.split("/") if p]
+            if len(parts) == 2:
+                api_url = f"https://api.github.com/repos/{parts[0]}/{parts[1]}/readme"
+                req = urllib.request.Request(api_url, headers={"User-Agent": "ClawTeam-Server"})
+                with urllib.request.urlopen(req, timeout=self.proxy_timeout_seconds) as resp:
+                    data = json.loads(resp.read().decode())
+                    return data.get("download_url", target_url)
+
+            return target_url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
+
+        return target_url
+
+    def _serve_proxy(self, target_url: str):
+        try:
+            resolved_url = self._resolve_proxy_url(target_url)
+            req = urllib.request.Request(resolved_url, headers={"User-Agent": "ClawTeam-Server"})
+            with urllib.request.urlopen(req, timeout=self.proxy_timeout_seconds) as resp:
+                content_length_header = resp.headers.get("Content-Length")
+                if content_length_header is not None:
+                    try:
+                        content_length = int(content_length_header)
+                    except ValueError:
+                        content_length = None
+                    if content_length is not None and content_length > self.proxy_max_bytes:
+                        self.send_error(413, "Response too large")
+                        return
+                else:
+                    content_length = None
+
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                if content_length is not None:
+                    self.send_header("Content-Length", str(content_length))
+                self.end_headers()
+
+                total = 0
+                while True:
+                    chunk = resp.read(self.proxy_chunk_size)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if total > self.proxy_max_bytes:
+                        self.send_error(413, "Response too large")
+                        return
+                    self.wfile.write(chunk)
+        except TimeoutError:
+            self.send_error(504, "Proxy request timed out")
+        except socket.timeout:
+            self.send_error(504, "Proxy request timed out")
+        except urllib.error.URLError as e:
+            if isinstance(e.reason, (TimeoutError, socket.timeout)):
+                self.send_error(504, "Proxy request timed out")
+            else:
+                self.send_error(502, str(e))
+        except Exception as e:
+            self.send_error(500, str(e))
 
     def log_message(self, format, *args):
         # Suppress default stderr logging for SSE connections

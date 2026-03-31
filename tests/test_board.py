@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import socket
 from pathlib import Path
 
 from clawteam.board.collector import BoardCollector
@@ -282,3 +283,102 @@ def test_serve_sse_uses_shared_team_snapshot_cache(monkeypatch):
     handler._serve_sse("demo")
 
     assert calls["count"] == 1
+
+
+def test_serve_proxy_returns_504_on_timeout(monkeypatch):
+    handler = object.__new__(BoardHandler)
+    handler.proxy_timeout_seconds = 0.01
+    handler.proxy_max_bytes = 2 * 1024 * 1024
+    handler.proxy_chunk_size = 1024
+    handler.wfile = io.BytesIO()
+
+    captured = {}
+    handler.send_error = lambda code, msg=None: captured.setdefault("error", (code, msg))
+    handler.send_response = lambda code: captured.setdefault("status", code)
+    handler.send_header = lambda name, value: None
+    handler.end_headers = lambda: None
+
+    def fake_urlopen(req, timeout=None):
+        raise socket.timeout("slow upstream")
+
+    monkeypatch.setattr("clawteam.board.server.urllib.request.urlopen", fake_urlopen)
+
+    handler._serve_proxy("https://example.com/slow.txt")
+
+    assert captured["error"] == (504, "Proxy request timed out")
+
+
+def test_serve_proxy_returns_413_for_oversized_content_length(monkeypatch):
+    handler = object.__new__(BoardHandler)
+    handler.proxy_timeout_seconds = 1
+    handler.proxy_max_bytes = 1024
+    handler.proxy_chunk_size = 256
+    handler.wfile = io.BytesIO()
+
+    captured = {}
+    handler.send_error = lambda code, msg=None: captured.setdefault("error", (code, msg))
+    handler.send_response = lambda code: captured.setdefault("status", code)
+    handler.send_header = lambda name, value: None
+    handler.end_headers = lambda: None
+
+    class FakeResponse:
+        def __init__(self):
+            self.headers = {"Content-Length": "2048"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self, size=-1):
+            return b""
+
+    monkeypatch.setattr(
+        "clawteam.board.server.urllib.request.urlopen",
+        lambda req, timeout=None: FakeResponse(),
+    )
+
+    handler._serve_proxy("https://example.com/large.txt")
+
+    assert captured["error"] == (413, "Response too large")
+
+
+def test_serve_proxy_streams_chunks_without_content_length(monkeypatch):
+    handler = object.__new__(BoardHandler)
+    handler.proxy_timeout_seconds = 1
+    handler.proxy_max_bytes = 4096
+    handler.proxy_chunk_size = 4
+    handler.wfile = io.BytesIO()
+
+    headers = []
+    status = {}
+    handler.send_error = lambda code, msg=None: (_ for _ in ()).throw(AssertionError((code, msg)))
+    handler.send_response = lambda code: status.setdefault("code", code)
+    handler.send_header = lambda name, value: headers.append((name, value))
+    handler.end_headers = lambda: None
+
+    class FakeResponse:
+        def __init__(self):
+            self.headers = {}
+            self._chunks = [b"abcd", b"ef", b""]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self, size=-1):
+            return self._chunks.pop(0)
+
+    monkeypatch.setattr(
+        "clawteam.board.server.urllib.request.urlopen",
+        lambda req, timeout=None: FakeResponse(),
+    )
+
+    handler._serve_proxy("https://example.com/chunked.txt")
+
+    assert status["code"] == 200
+    assert ("Content-Length", "6") not in headers
+    assert handler.wfile.getvalue() == b"abcdef"
