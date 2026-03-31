@@ -394,8 +394,11 @@ class CmuxBackend(SpawnBackend):
             )
 
             # Override close command: surface mode closes the tab, not the workspace
+            # Also set correct CMUX env vars so spawned shell knows its own identity
             with open(env_path, "a") as f:
                 f.write(f"export _CMUX_CLOSE_CMD={shlex.quote(f'{_CMUX_BIN} close-surface --surface {surface_ref}')}\n")
+                f.write(f"export CMUX_WORKSPACE_ID={shlex.quote(parent_workspace)}\n")
+                f.write(f"export CMUX_SURFACE_ID={shlex.quote(surface_ref)}\n")
 
             # Source the launcher so env vars land in the shell process
             subprocess.run(
@@ -442,6 +445,12 @@ class CmuxBackend(SpawnBackend):
                 )
             # IMPORTANT: Use workspace_ref for ALL subsequent cmux operations.
             cmux_handle = workspace_ref or workspace_name
+
+            # Override CMUX_WORKSPACE_ID in env file so spawned shell knows its
+            # own workspace, not the parent's. The env file is sourced at startup.
+            if workspace_ref:
+                with open(env_path, "a") as f:
+                    f.write(f"export CMUX_WORKSPACE_ID={shlex.quote(workspace_ref)}\n")
 
         # Load config for readiness timeouts (both modes need this)
         from clawteam.config import load_config
