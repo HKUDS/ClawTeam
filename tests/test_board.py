@@ -4,8 +4,10 @@ import io
 import socket
 from pathlib import Path
 
+import pytest
+
 from clawteam.board.collector import BoardCollector
-from clawteam.board.server import BoardHandler
+from clawteam.board.server import BoardHandler, _fetch_proxy_content, _normalize_proxy_target
 from clawteam.team.mailbox import MailboxManager
 from clawteam.team.manager import TeamManager
 

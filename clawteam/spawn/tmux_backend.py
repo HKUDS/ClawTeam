@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+from xml.sax.saxutils import escape
 
 from clawteam.spawn.adapters import (
     NativeCliAdapter,
@@ -18,6 +19,7 @@ from clawteam.spawn.adapters import (
     is_kimi_command,
     is_nanobot_command,
     is_opencode_command,
+    is_pi_command,
     is_qwen_command,
 )
 from clawteam.spawn.base import SpawnBackend
@@ -91,7 +93,7 @@ class TmuxBackend(SpawnBackend):
         validation_command = normalized_command
         final_command = list(prepared.final_command)
         post_launch_prompt = prepared.post_launch_prompt
-        if system_prompt and is_claude_command(normalized_command):
+        if system_prompt and (is_claude_command(normalized_command) or is_pi_command(normalized_command)):
             insert_at = final_command.index("-p") if "-p" in final_command else len(final_command)
             final_command[insert_at:insert_at] = ["--append-system-prompt", system_prompt]
 
@@ -237,6 +239,31 @@ class TmuxBackend(SpawnBackend):
             {"name": name, "target": target, "backend": "tmux"}
             for name, target in self._agents.items()
         ]
+
+    def inject_runtime_message(self, team: str, agent_name: str, envelope) -> tuple[bool, str]:
+        """Best-effort runtime injection into an existing tmux agent pane."""
+        if not shutil.which("tmux"):
+            return False, "tmux not installed"
+
+        target = f"{self.session_name(team)}:{agent_name}"
+        probe = subprocess.run(
+            ["tmux", "list-panes", "-t", target, "-F", "#{pane_id}"],
+            capture_output=True,
+            text=True,
+        )
+        if probe.returncode != 0 or not probe.stdout.strip():
+            return False, f"tmux target '{target}' not found"
+
+        try:
+            _inject_prompt_via_buffer(
+                target,
+                agent_name,
+                _render_runtime_notification(envelope),
+            )
+        except Exception as exc:
+            return False, f"runtime injection failed for '{target}': {exc}"
+
+        return True, f"Injected runtime notification into {target}"
 
     @staticmethod
     def session_name(team_name: str) -> str:
@@ -610,3 +637,39 @@ def _inject_prompt_via_buffer(
         )
     finally:
         os.unlink(tmp_path)
+
+def _render_runtime_notification(envelope) -> str:
+    summary = str(getattr(envelope, "summary", "") or "").strip()
+    if not summary:
+        summary = "Runtime update"
+
+    evidence = getattr(envelope, "evidence", []) or []
+    if isinstance(evidence, str):
+        evidence = [evidence]
+    evidence_block = "\n".join(str(item) for item in evidence if item)
+
+    lines = [
+        '<clawteam_notification version="1"',
+        f'  source="{escape(str(getattr(envelope, "source", "system") or "system"))}"',
+        f'  target="{escape(str(getattr(envelope, "target", "") or ""))}"',
+        f'  channel="{escape(str(getattr(envelope, "channel", "direct") or "direct"))}"',
+        f'  priority="{escape(str(getattr(envelope, "priority", "medium") or "medium"))}">',
+        "<summary>",
+        escape(summary),
+        "</summary>",
+    ]
+
+    if evidence_block:
+        lines.extend(["<evidence>", escape(evidence_block), "</evidence>"])
+    recommended_next_action = str(getattr(envelope, "recommended_next_action", "") or "").strip()
+    if recommended_next_action:
+        lines.extend(
+            [
+                "<recommended_next_action>",
+                escape(recommended_next_action),
+                "</recommended_next_action>",
+            ]
+        )
+
+    lines.append("</clawteam_notification>")
+    return "\n".join(lines)

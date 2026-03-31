@@ -9,6 +9,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from clawteam.paths import ensure_within_root, validate_identifier
 from clawteam.team.models import get_data_dir
 
 
@@ -30,7 +31,7 @@ class SessionState(BaseModel):
 
 
 def _sessions_root(team_name: str) -> Path:
-    d = get_data_dir() / "sessions" / team_name
+    d = ensure_within_root(get_data_dir() / "sessions", validate_identifier(team_name, "team name"))
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -43,6 +44,7 @@ class SessionStore:
     """
 
     def __init__(self, team_name: str):
+        validate_identifier(team_name, "team name")
         self.team_name = team_name
 
     def save(
@@ -52,6 +54,7 @@ class SessionStore:
         last_task_id: str = "",
         state: dict[str, Any] | None = None,
     ) -> SessionState:
+        validate_identifier(agent_name, "agent name")
         session = SessionState(
             agent_name=agent_name,
             team_name=self.team_name,
@@ -64,10 +67,12 @@ class SessionStore:
         tmp.write_text(
             session.model_dump_json(indent=2, by_alias=True), encoding="utf-8"
         )
-        tmp.replace(path)
+        import os
+        os.replace(str(tmp), str(path))
         return session
 
     def load(self, agent_name: str) -> SessionState | None:
+        validate_identifier(agent_name, "agent name")
         path = _sessions_root(self.team_name) / f"{agent_name}.json"
         if not path.exists():
             return None
@@ -78,6 +83,7 @@ class SessionStore:
             return None
 
     def clear(self, agent_name: str) -> bool:
+        validate_identifier(agent_name, "agent name")
         path = _sessions_root(self.team_name) / f"{agent_name}.json"
         if path.exists():
             path.unlink()

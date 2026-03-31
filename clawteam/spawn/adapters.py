@@ -70,6 +70,14 @@ class NativeCliAdapter:
                     final_command.extend(["--session", agent_name])
                 if prompt:
                     final_command.extend(["--message", prompt])
+        elif is_pi_command(normalized_command):
+            # pi doesn't require special flags for skip_permissions (minimal by design)
+            # pi works in cwd automatically, no workspace flag needed
+            if prompt:
+                if interactive:
+                    final_command.append(prompt)
+                else:
+                    final_command.extend(["-p", prompt])
         elif prompt:
             if interactive and is_claude_command(normalized_command):
                 post_launch_prompt = prompt
@@ -159,6 +167,11 @@ def is_openclaw_command(command: list[str]) -> bool:
     return command_basename(command) == "openclaw"
 
 
+def is_pi_command(command: list[str]) -> bool:
+    """Check if the command is a pi-coding-agent CLI invocation."""
+    return command_basename(command) == "pi"
+
+
 def is_interactive_cli(command: list[str]) -> bool:
     """Check if the command is a known interactive AI coding CLI."""
     return (
@@ -170,6 +183,7 @@ def is_interactive_cli(command: list[str]) -> bool:
         or is_qwen_command(command)
         or is_opencode_command(command)
         or is_openclaw_command(command)
+        or is_pi_command(command)
     )
 
 

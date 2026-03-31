@@ -6,6 +6,8 @@ import socket
 import time
 from pathlib import Path
 
+import pytest
+
 from clawteam.team.mailbox import MailboxManager
 from clawteam.team.manager import TeamManager
 from clawteam.team.models import MessageType, get_data_dir
@@ -89,6 +91,11 @@ class TestSendReceive:
         msgs = mb.receive("leader")
         assert msgs[0].type == MessageType.join_request
         assert msgs[0].proposed_name == "worker-1"
+
+    def test_send_rejects_path_traversal_recipient(self, team_name):
+        mb = _make_mailbox(team_name)
+        with pytest.raises(ValueError, match="Invalid recipient name"):
+            mb.send(from_agent="alice", to="../bob", content="nope")
 
 
 class TestPeek:
@@ -371,14 +378,14 @@ class TestFileTransport:
         message_files = list(inbox.glob("msg-*.json"))
         assert len(message_files) == 1
 
-        original_replace = Path.replace
+        original_replace = os.replace
 
-        def fake_replace(self, target):
-            if self == message_files[0]:
+        def fake_replace(src, target):
+            if src == str(message_files[0]):
                 raise OSError("claimed by another consumer")
-            return original_replace(self, target)
+            return original_replace(src, target)
 
-        monkeypatch.setattr(Path, "replace", fake_replace)
+        monkeypatch.setattr(os, "replace", fake_replace)
 
         assert transport.fetch("bob", consume=True) == []
         assert len(list(inbox.glob("msg-*.json"))) == 1

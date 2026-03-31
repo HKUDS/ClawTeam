@@ -107,7 +107,7 @@ class TaskWaiter:
                     last_summary = summary
 
                 # 4. All done?
-                if total > 0 and completed == total:
+                if completed == total:
                     # Final drain — catch messages that arrived after task completion
                     for msg in self.mailbox.receive(self.agent_name, limit=50):
                         self._messages_received += 1

@@ -41,6 +41,14 @@ class TestCreateTeam:
         with pytest.raises(ValueError, match="already exists"):
             TeamManager.create_team(name=team_name, leader_name="b", leader_id="2")
 
+    def test_rejects_path_traversal_team_name(self):
+        with pytest.raises(ValueError, match="Invalid team name"):
+            TeamManager.create_team(name="../escape", leader_name="lead", leader_id="x")
+
+    def test_rejects_invalid_leader_name(self, team_name):
+        with pytest.raises(ValueError, match="Invalid leader name"):
+            TeamManager.create_team(name=team_name, leader_name="../lead", leader_id="x")
+
 
 class TestGetTeam:
     def test_get_existing(self, team_name):
@@ -84,6 +92,11 @@ class TestAddMember:
     def test_add_to_nonexistent_team(self):
         with pytest.raises(ValueError, match="not found"):
             TeamManager.add_member("nope", "worker", agent_id="x")
+
+    def test_add_member_rejects_invalid_name(self, team_name):
+        TeamManager.create_team(name=team_name, leader_name="lead", leader_id="1")
+        with pytest.raises(ValueError, match="Invalid member name"):
+            TeamManager.add_member(team_name, "../worker", agent_id="2")
 
 
 class TestRemoveMember:
@@ -174,3 +187,7 @@ class TestCleanup:
 
     def test_cleanup_nonexistent_team(self):
         assert TeamManager.cleanup("never-existed") is False
+
+    def test_cleanup_rejects_path_traversal_team_name(self):
+        with pytest.raises(ValueError, match="Invalid team name"):
+            TeamManager.cleanup("../escape")

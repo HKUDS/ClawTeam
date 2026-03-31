@@ -9,6 +9,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from clawteam.fileutil import atomic_write_text, file_locked
+from clawteam.paths import ensure_within_root, validate_identifier
 from clawteam.team.models import get_data_dir
 
 
@@ -72,7 +74,7 @@ class _CostSummaryCache(BaseModel):
 
 
 def _costs_root(team_name: str) -> Path:
-    d = get_data_dir() / "costs" / team_name
+    d = ensure_within_root(get_data_dir() / "costs", validate_identifier(team_name, "team name"))
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -108,10 +110,10 @@ def _load_summary_cache(team_name: str) -> _CostSummaryCache | None:
 
 
 def _write_summary_cache(team_name: str, cache: _CostSummaryCache) -> None:
-    path = _summary_cache_path(team_name)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(cache.model_dump_json(indent=2, by_alias=True), encoding="utf-8")
-    tmp.replace(path)
+    atomic_write_text(
+        _summary_cache_path(team_name),
+        cache.model_dump_json(indent=2, by_alias=True),
+    )
 
 
 def _normalize_cost(value: float) -> float:
@@ -159,49 +161,51 @@ def _cache_entry_from_event(path: Path, event: CostEvent) -> _CostCacheEntry:
 
 
 def _sync_summary_cache(team_name: str) -> _CostSummaryCache:
-    root = _costs_root(team_name)
-    cache = _load_summary_cache(team_name) or _empty_summary_cache(team_name)
-    cache_exists = _summary_cache_path(team_name).exists()
-    changed = not cache_exists
+    with file_locked(_summary_cache_path(team_name)):
+        root = _costs_root(team_name)
+        cache = _load_summary_cache(team_name) or _empty_summary_cache(team_name)
+        cache_exists = _summary_cache_path(team_name).exists()
+        changed = not cache_exists
 
-    current_files = {path.name: path for path in sorted(root.glob("cost-*.json"))}
+        current_files = {path.name: path for path in sorted(root.glob("cost-*.json"))}
 
-    for filename in list(cache.files):
-        if filename not in current_files:
-            _remove_cache_entry(cache, filename)
+        for filename in list(cache.files):
+            if filename not in current_files:
+                _remove_cache_entry(cache, filename)
+                changed = True
+
+        for filename, path in current_files.items():
+            stat = path.stat()
+            cached_entry = cache.files.get(filename)
+            if (
+                cached_entry is not None
+                and cached_entry.size == stat.st_size
+                and cached_entry.mtime_ns == stat.st_mtime_ns
+            ):
+                continue
+
+            if cached_entry is not None:
+                _remove_cache_entry(cache, filename)
+                changed = True
+
+            event = _read_event_file(path)
+            if event is None:
+                continue
+
+            _add_cache_entry(cache, filename, _cache_entry_from_event(path, event))
             changed = True
 
-    for filename, path in current_files.items():
-        stat = path.stat()
-        cached_entry = cache.files.get(filename)
-        if (
-            cached_entry is not None
-            and cached_entry.size == stat.st_size
-            and cached_entry.mtime_ns == stat.st_mtime_ns
-        ):
-            continue
-
-        if cached_entry is not None:
-            _remove_cache_entry(cache, filename)
-            changed = True
-
-        event = _read_event_file(path)
-        if event is None:
-            continue
-
-        _add_cache_entry(cache, filename, _cache_entry_from_event(path, event))
-        changed = True
-
-    if changed:
-        _write_summary_cache(team_name, cache)
-    return cache
+        if changed:
+            _write_summary_cache(team_name, cache)
+        return cache
 
 
 def _record_event_in_summary_cache(team_name: str, path: Path, event: CostEvent) -> None:
-    cache = _load_summary_cache(team_name) or _empty_summary_cache(team_name)
-    _remove_cache_entry(cache, path.name)
-    _add_cache_entry(cache, path.name, _cache_entry_from_event(path, event))
-    _write_summary_cache(team_name, cache)
+    with file_locked(_summary_cache_path(team_name)):
+        cache = _load_summary_cache(team_name) or _empty_summary_cache(team_name)
+        _remove_cache_entry(cache, path.name)
+        _add_cache_entry(cache, path.name, _cache_entry_from_event(path, event))
+        _write_summary_cache(team_name, cache)
 
 
 def _cache_to_summary(cache: _CostSummaryCache) -> CostSummary:
@@ -249,7 +253,8 @@ class CostStore:
         tmp.write_text(
             event.model_dump_json(indent=2, by_alias=True), encoding="utf-8"
         )
-        tmp.replace(path)
+        import os
+        os.replace(str(tmp), str(path))
         try:
             _record_event_in_summary_cache(self.team_name, path, event)
         except Exception:

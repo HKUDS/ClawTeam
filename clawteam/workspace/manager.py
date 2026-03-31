@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
+from clawteam.paths import ensure_within_root, validate_identifier
 from clawteam.workspace import git
 from clawteam.workspace.models import WorkspaceInfo, WorkspaceRegistry
 
@@ -21,7 +24,11 @@ def _workspaces_root() -> Path:
 
 
 def _registry_path(team_name: str) -> Path:
-    return _workspaces_root() / team_name / "workspace-registry.json"
+    return ensure_within_root(
+        _workspaces_root(),
+        validate_identifier(team_name, "team name"),
+        "workspace-registry.json",
+    )
 
 
 def _load_registry(team_name: str, repo_root: str) -> WorkspaceRegistry:
@@ -40,7 +47,7 @@ def _save_registry(registry: WorkspaceRegistry) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
     tmp.write_text(registry.model_dump_json(indent=2), encoding="utf-8")
-    tmp.replace(path)
+    os.replace(str(tmp), str(path))
 
 
 class WorkspaceManager:
@@ -61,8 +68,10 @@ class WorkspaceManager:
         agent_name: str,
         agent_id: str,
     ) -> WorkspaceInfo:
+        validate_identifier(team_name, "team name")
+        validate_identifier(agent_name, "agent name")
         branch = f"clawteam/{team_name}/{agent_name}"
-        wt_path = _workspaces_root() / team_name / agent_name
+        wt_path = ensure_within_root(_workspaces_root(), team_name, agent_name)
 
         # Crash recovery: stale branch metadata can survive after the physical
         # worktree directory is deleted, so clear both path and branch state.
@@ -79,6 +88,71 @@ class WorkspaceManager:
         git.create_worktree(
             self.repo_root, wt_path, branch, base_ref=self.base_branch,
         )
+
+        # OpenClaw-specific workspace slimming only makes sense in repositories
+        # that actually carry the expected OpenClaw layout.
+        if (self.repo_root / "openclaw.json").exists() and wt_path.exists():
+            keep_always = [
+                "openclaw.json",
+                ".env",
+                ".env.local",
+                "SOUL.md",
+                "AGENTS.md",
+                "TOOLS.md",
+                "MEMORY.md",
+                "HEARTBEAT.md",
+                "IDENTITY.md",
+                "USER.md",
+                "skills/",
+                "scripts/",
+                ".openclaw/",
+                ".clawhub/",
+                "node_modules/",
+                "venv/",
+                ".venv/",
+                "poetry.lock",
+                "pyproject.toml",
+                "requirements.txt",
+                ".git",
+            ]
+
+            for item in wt_path.iterdir():
+                keep = False
+                for pattern in keep_always:
+                    if pattern.endswith("/"):
+                        if item.is_dir() and item.name == pattern.rstrip("/"):
+                            keep = True
+                            break
+                    elif item.is_file() and item.name == pattern:
+                        keep = True
+                        break
+
+                if not keep:
+                    try:
+                        if item.is_symlink():
+                            item.unlink()
+                        elif item.is_file():
+                            item.unlink()
+                        elif item.is_dir():
+                            shutil.rmtree(item)
+                    except Exception as exc:
+                        logger.warning("failed to remove %s: %s", item, exc)
+
+            for dir_name in ["node_modules", ".venv", "venv"]:
+                main_dir = self.repo_root / dir_name
+                target_dir = wt_path / dir_name
+                if main_dir.exists() and main_dir.is_dir() and not target_dir.exists():
+                    try:
+                        os.symlink(main_dir, target_dir)
+                        logger.info("created symlink: %s -> %s", target_dir, main_dir)
+                    except Exception as exc:
+                        logger.warning("failed to create symlink %s: %s", dir_name, exc)
+
+            for path in [wt_path / "openclaw.json", wt_path / "skills", wt_path / "scripts"]:
+                if not path.exists():
+                    raise RuntimeError(
+                        f"workspace slimming left required OpenClaw path missing: {path.name}"
+                    )
 
         info = WorkspaceInfo(
             agent_name=agent_name,

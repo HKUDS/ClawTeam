@@ -1888,6 +1888,130 @@ def inbox_watch(
 
 
 # ============================================================================
+# Runtime Commands
+# ============================================================================
+
+runtime_app = typer.Typer(help="Tmux-only runtime routing and live injection")
+app.add_typer(runtime_app, name="runtime")
+
+
+@runtime_app.command("inject")
+def runtime_inject(
+    team: str = typer.Argument(..., help="Team name"),
+    agent: str = typer.Argument(..., help="Target agent name"),
+    source: str = typer.Option("system", "--source", "-s", help="Runtime notification source"),
+    channel: str = typer.Option("direct", "--channel", help="Runtime notification channel"),
+    priority: str = typer.Option("medium", "--priority", help="Runtime notification priority"),
+    summary: str = typer.Option(..., "--summary", help="Summary text for the injected notification"),
+    evidence: list[str] = typer.Option([], "--evidence", "-e", help="Repeatable evidence line"),
+    recommended_next_action: Optional[str] = typer.Option(
+        None,
+        "--recommended-next-action",
+        help="Optional recommended next action",
+    ),
+):
+    """Inject a structured runtime notification into a running tmux agent."""
+    from clawteam.spawn.tmux_backend import TmuxBackend
+    from clawteam.team.routing_policy import RuntimeEnvelope
+
+    envelope = RuntimeEnvelope(
+        source=source,
+        target=agent,
+        channel=channel,
+        priority=priority,
+        message_type="manual",
+        summary=summary,
+        evidence=list(evidence),
+        recommended_next_action=recommended_next_action,
+    )
+    ok, status = TmuxBackend().inject_runtime_message(team, agent, envelope)
+    if not ok:
+        console.print(f"[red]{status}[/red]")
+        raise typer.Exit(1)
+
+    _output(
+        {"team": team, "agent": agent, "status": status},
+        lambda data: console.print(f"[green]OK[/green] {data['status']}"),
+    )
+
+
+@runtime_app.command("watch")
+def runtime_watch(
+    team: str = typer.Argument(..., help="Team name"),
+    agent: Optional[str] = typer.Option(None, "--agent", "-a", help="Agent name (default: from env)"),
+    poll_interval: float = typer.Option(1.0, "--poll-interval", "-p", help="Poll interval in seconds"),
+    exec_cmd: Optional[str] = typer.Option(
+        None,
+        "--exec",
+        "-e",
+        help="Shell command to run for each new message (msg data in env vars)",
+    ),
+):
+    """Watch an inbox and route new messages into the running tmux session."""
+    from clawteam.identity import AgentIdentity
+    from clawteam.team.mailbox import MailboxManager
+    from clawteam.team.manager import TeamManager
+    from clawteam.team.router import RuntimeRouter
+    from clawteam.team.watcher import InboxWatcher
+
+    identity = AgentIdentity.from_env()
+    agent_name = TeamManager.resolve_inbox(team, agent or identity.agent_name, identity.user)
+    mailbox = MailboxManager(team)
+    router = RuntimeRouter(
+        team_name=team,
+        agent_name=agent_name,
+        session_agent_name=agent or identity.agent_name,
+    )
+
+    if not _json_output:
+        console.print(
+            f"Watching runtime routes for '{agent_name}' in team '{team}'... (Ctrl+C to stop)"
+        )
+        if exec_cmd:
+            console.print(f"  exec: {exec_cmd}")
+
+    watcher = InboxWatcher(
+        team_name=team,
+        agent_name=agent_name,
+        mailbox=mailbox,
+        poll_interval=poll_interval,
+        json_output=_json_output,
+        exec_cmd=exec_cmd,
+        runtime_router=router,
+    )
+    watcher.watch()
+
+
+@runtime_app.command("state")
+def runtime_state(
+    team: str = typer.Argument(..., help="Team name"),
+):
+    """Show persisted Phase 1 runtime throttle and dispatch state."""
+    from clawteam.team.routing_policy import DefaultRoutingPolicy
+
+    state = DefaultRoutingPolicy(team_name=team).read_state()
+
+    def _human(data):
+        console.print(
+            f"Runtime state for '{data['team']}' (throttle={data['throttleSeconds']}s)"
+        )
+        routes = data.get("routes", {})
+        if not routes:
+            console.print("[dim]No runtime route state.[/dim]")
+            return
+        for key in sorted(routes):
+            route = routes[key]
+            console.print(
+                f"  {route.get('source', '?')} -> {route.get('target', '?')} "
+                f"pending={route.get('pendingCount', 0)} "
+                f"status={route.get('lastDispatchStatus', 'idle')} "
+                f"flushAfter={route.get('flushAfter', '') or '-'}"
+            )
+
+    _output(state, _human)
+
+
+# ============================================================================
 # Task Commands
 # ============================================================================
 
