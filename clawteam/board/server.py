@@ -52,6 +52,8 @@ class BoardHandler(BaseHTTPRequestHandler):
     def _is_safe_team_name(team_name: str) -> bool:
         if not team_name:
             return False
+        if team_name in {".", ".."}:
+            return False
         if "/" in team_name or "\\" in team_name:
             return False
         if any(part in {".", ".."} for part in PurePosixPath(team_name).parts):
