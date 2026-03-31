@@ -1,12 +1,26 @@
 from __future__ import annotations
 
 import io
+import json
 from pathlib import Path
 
 from clawteam.board.collector import BoardCollector
 from clawteam.board.server import BoardHandler
 from clawteam.team.mailbox import MailboxManager
 from clawteam.team.manager import TeamManager
+
+
+def _make_post_handler(path: str, payload: str = "", headers: dict[str, str] | None = None):
+    handler = object.__new__(BoardHandler)
+    handler.path = path
+    handler.headers = {"Content-Length": str(len(payload.encode("utf-8"))), **(headers or {})}
+    handler.rfile = io.BytesIO(payload.encode("utf-8"))
+    handler.wfile = io.BytesIO()
+    served: dict[str, object] = {}
+    errors: list[tuple[int, str | None]] = []
+    handler._serve_json = lambda data: served.setdefault("data", data)
+    handler.send_error = lambda code, message=None: errors.append((code, message))
+    return handler, served, errors
 
 
 def test_collect_overview_does_not_call_collect_team(monkeypatch, tmp_path: Path):
@@ -282,3 +296,123 @@ def test_serve_sse_uses_shared_team_snapshot_cache(monkeypatch):
     handler._serve_sse("demo")
 
     assert calls["count"] == 1
+
+
+def test_do_post_creates_task_for_team_path(monkeypatch):
+    created: dict[str, str] = {}
+
+    class FakeTaskStore:
+        def __init__(self, team_name: str):
+            created["team_name"] = team_name
+
+        def create(self, subject: str, description: str, owner: str):
+            created["subject"] = subject
+            created["description"] = description
+            created["owner"] = owner
+            return type("Task", (), {"id": "task-123"})()
+
+    monkeypatch.setattr("clawteam.team.tasks.TaskStore", FakeTaskStore)
+    payload = json.dumps({"subject": "Test task", "description": "details", "owner": "leader"})
+    handler, served, errors = _make_post_handler("/api/team/demo/task", payload=payload)
+
+    handler.do_POST()
+
+    assert created == {
+        "team_name": "demo",
+        "subject": "Test task",
+        "description": "details",
+        "owner": "leader",
+    }
+    assert served["data"] == {"status": "ok", "task_id": "task-123"}
+    assert errors == []
+
+
+def test_do_post_invalid_json_returns_400_error(monkeypatch):
+    class FakeTaskStore:
+        def __init__(self, team_name: str):
+            raise AssertionError("TaskStore should not be instantiated for invalid JSON")
+
+    monkeypatch.setattr("clawteam.team.tasks.TaskStore", FakeTaskStore)
+    handler, served, errors = _make_post_handler("/api/team/demo/task", payload="{not-json")
+
+    handler.do_POST()
+
+    assert "data" not in served
+    assert len(errors) == 1
+    assert errors[0][0] == 400
+
+
+def test_do_post_missing_or_empty_subject_is_forwarded_as_empty(monkeypatch):
+    calls: list[str] = []
+
+    class FakeTaskStore:
+        def __init__(self, team_name: str):
+            pass
+
+        def create(self, subject: str, description: str, owner: str):
+            calls.append(subject)
+            return type("Task", (), {"id": "task-1"})()
+
+    monkeypatch.setattr("clawteam.team.tasks.TaskStore", FakeTaskStore)
+
+    missing_subject, served_missing, errors_missing = _make_post_handler(
+        "/api/team/demo/task",
+        payload=json.dumps({"description": "details"}),
+    )
+    missing_subject.do_POST()
+
+    empty_subject, served_empty, errors_empty = _make_post_handler(
+        "/api/team/demo/task",
+        payload=json.dumps({"subject": "", "description": "details"}),
+    )
+    empty_subject.do_POST()
+
+    assert calls == ["", ""]
+    assert served_missing["data"] == {"status": "ok", "task_id": "task-1"}
+    assert served_empty["data"] == {"status": "ok", "task_id": "task-1"}
+    assert errors_missing == []
+    assert errors_empty == []
+
+
+def test_do_post_task_path_variants_return_404(monkeypatch):
+    class FakeTaskStore:
+        def __init__(self, team_name: str):
+            raise AssertionError("TaskStore should not be instantiated for invalid paths")
+
+    monkeypatch.setattr("clawteam.team.tasks.TaskStore", FakeTaskStore)
+    invalid_paths = [
+        "/api/team/demo",
+        "/api/team/demo/task/extra",
+        "/api/team/demo/extra/task",
+        "/api/team//task",
+        "/api/team/task",
+    ]
+
+    for path in invalid_paths:
+        handler, served, errors = _make_post_handler(path, payload=json.dumps({"subject": "x"}))
+        handler.do_POST()
+        assert "data" not in served
+        assert errors == [(404, None)]
+
+
+def test_do_post_decodes_urlencoded_team_name(monkeypatch):
+    captured: dict[str, str] = {}
+
+    class FakeTaskStore:
+        def __init__(self, team_name: str):
+            captured["team_name"] = team_name
+
+        def create(self, subject: str, description: str, owner: str):
+            return type("Task", (), {"id": "task-encoded"})()
+
+    monkeypatch.setattr("clawteam.team.tasks.TaskStore", FakeTaskStore)
+    handler, served, errors = _make_post_handler(
+        "/api/team/demo%20team/task",
+        payload=json.dumps({"subject": "encoded"}),
+    )
+
+    handler.do_POST()
+
+    assert captured["team_name"] == "demo team"
+    assert served["data"] == {"status": "ok", "task_id": "task-encoded"}
+    assert errors == []
