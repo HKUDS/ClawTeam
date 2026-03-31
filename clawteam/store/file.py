@@ -3,19 +3,11 @@
 from __future__ import annotations
 
 import json
-import os
-import sys
-import tempfile
-from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-if sys.platform == "win32":
-    import msvcrt
-else:
-    import fcntl
-
+from clawteam.fileutil import atomic_write_text, file_locked
 from clawteam.paths import ensure_within_root, validate_identifier
 from clawteam.store.base import BaseTaskStore, TaskLockError
 from clawteam.team.models import TaskItem, TaskPriority, TaskStatus, get_data_dir
@@ -34,9 +26,6 @@ def _task_path(team_name: str, task_id: str) -> Path:
     return _tasks_root(team_name) / f"task-{task_id}.json"
 
 
-def _tasks_lock_path(team_name: str) -> Path:
-    return _tasks_root(team_name) / ".tasks.lock"
-
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -51,28 +40,8 @@ class FileTaskStore(BaseTaskStore):
     Concurrent access is serialised with an OS-specific advisory lock.
     """
 
-    @contextmanager
     def _write_lock(self):
-        lock_path = _tasks_lock_path(self.team_name)
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
-        with lock_path.open("a+", encoding="utf-8") as lock_file:
-            if sys.platform == "win32":
-                pos = lock_file.tell()
-                lock_file.seek(0)
-                msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
-                lock_file.seek(pos)
-            else:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-            try:
-                yield
-            finally:
-                if sys.platform == "win32":
-                    pos = lock_file.tell()
-                    lock_file.seek(0)
-                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
-                    lock_file.seek(pos)
-                else:
-                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+        return file_locked(_tasks_root(self.team_name) / ".tasks")
 
     def create(
         self,
@@ -320,19 +289,7 @@ class FileTaskStore(BaseTaskStore):
 
     def _save_unlocked(self, task: TaskItem) -> None:
         path = _task_path(self.team_name, task.id)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp_name = tempfile.mkstemp(
-            dir=path.parent,
-            prefix=f"{path.stem}-",
-            suffix=".tmp",
-        )
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as tmp_file:
-                tmp_file.write(task.model_dump_json(indent=2, by_alias=True))
-            os.replace(tmp_name, str(path))
-        except BaseException:
-            Path(tmp_name).unlink(missing_ok=True)
-            raise
+        atomic_write_text(path, task.model_dump_json(indent=2, by_alias=True))
 
     def _resolve_dependents_unlocked(self, completed_task_id: str) -> None:
         root = _tasks_root(self.team_name)
