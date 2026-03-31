@@ -79,6 +79,35 @@ def build_agent_prompt(
             context_block,
         ])
 
+    # Leader-only orchestration discipline (inspired by Coordinator pattern)
+    if agent_type == "leader":
+        lines.extend([
+            "",
+            "## Synthesis Protocol\n",
+            "When workers report findings, YOU must synthesize before delegating follow-up:",
+            "1. Read the findings carefully. Identify the root cause or approach.",
+            "2. Write a follow-up prompt with SPECIFIC file paths, line numbers, and exact changes.",
+            '3. NEVER write "based on your findings" or "based on the research" — these delegate understanding.\n',
+            'Bad: "Based on your findings, fix the auth bug"',
+            'Good: "Fix the null pointer in src/auth/validate.ts:42. The user field is undefined '
+            'when sessions expire but the token remains cached. Add a null check before user.id '
+            'access — if null, return 401."',
+            "",
+            "## Concurrency Guidelines\n",
+            "Parallelism is your superpower. Launch independent workers concurrently:",
+            "- Read-only tasks (research, reading files) — run in parallel freely",
+            "- Write-heavy tasks (implementation) — one worker at a time per file set to avoid conflicts",
+            "- Verification — can run alongside implementation on different file areas",
+            "- When doing research, cover multiple angles simultaneously",
+            "",
+            "## Verification Standards\n",
+            "Verification means PROVING the code works, not confirming it exists:",
+            '- Run tests with the feature enabled — not just "tests pass"',
+            '- Run type checks and investigate errors — do not dismiss as "unrelated"',
+            "- Test independently — prove the change works, do not rubber-stamp",
+            "- Try edge cases and error paths — do not just re-run what the implementation worker ran",
+        ])
+
     lines.extend([
         "",
         "## Coordination Protocol\n",

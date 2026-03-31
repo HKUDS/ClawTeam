@@ -255,6 +255,46 @@ clawteam --json task list my-team --status pending
 - For Claude Code on a fresh machine/home, run `clawteam profile doctor claude` once before spawning.
 - `context inject` and `context conflicts` are the recommended way to hand off cross-worktree tasks safely.
 
+## Leader Orchestration Guide
+
+Leaders coordinate workers. These patterns maximize output quality and minimize wasted cycles.
+
+### Continue vs New Worker
+
+After synthesizing worker findings, decide whether to continue or spawn fresh:
+
+| Situation | Action | Reason |
+|-----------|--------|--------|
+| Research explored exactly the files needing edits | Continue (`clawteam inbox send`) | Worker already has file context |
+| Research was broad but implementation is narrow | Spawn new worker | Clean context avoids exploration noise |
+| Correcting a recent failure | Continue | Worker has the error context and knows what it tried |
+| Verifying code another worker wrote | Spawn new worker | Verifier needs fresh eyes, no implementation bias |
+| First attempt used wrong approach entirely | Spawn new worker | Clean slate avoids anchoring on the failed path |
+
+### Worker Prompt Anti-Patterns
+
+**Bad — lazy delegation:**
+- `"Fix the bug we discussed"` — workers cannot see your conversation
+- `"Based on your findings, implement the fix"` — delegates understanding
+- `"Create a PR for the recent changes"` — ambiguous scope: which changes? which branch?
+- `"Something went wrong with the tests, can you look?"` — no error message, no file path
+
+**Good — synthesized specs:**
+- `"Fix the null pointer in src/auth/validate.ts:42. Add a null check before user.id access. Commit and report the hash."`
+- `"Run pytest tests/auth/ and verify the session expiry test passes. Report any failures with full stack traces."`
+- `"Create branch fix/session-expiry from main. Cherry-pick commit abc123. Push and create a draft PR targeting main."`
+
+### Task Workflow Phases
+
+Most tasks follow four phases:
+
+| Phase | Who | Purpose |
+|-------|-----|---------|
+| Research | Workers (parallel) | Investigate codebase, find files, understand the problem |
+| Synthesis | **Leader** | Read findings, understand the problem, craft implementation specs |
+| Implementation | Workers | Make targeted changes per spec, commit |
+| Verification | Workers (fresh spawn) | Prove changes work — run tests, typechecks, edge cases |
+
 ## Additional Resources
 
 - **`references/cli-reference.md`** — Complete CLI reference with commands, options, and data models
