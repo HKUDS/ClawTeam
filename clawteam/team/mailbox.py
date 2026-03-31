@@ -6,6 +6,7 @@ import json
 import time
 import uuid
 
+from clawteam.paths import ensure_within_root, validate_identifier
 from clawteam.team.models import MessageType, TeamMessage, get_data_dir
 from clawteam.transport.base import Transport
 from clawteam.transport.claimed import ClaimedMessage
@@ -39,8 +40,9 @@ class MailboxManager:
 
     def __init__(self, team_name: str, transport: Transport | None = None):
         self.team_name = team_name
+        validate_identifier(team_name, "team name")
         self._transport = transport or _default_transport(team_name)
-        self._events_dir = get_data_dir() / "teams" / team_name / "events"
+        self._events_dir = ensure_within_root(get_data_dir() / "teams", team_name, "events")
         self._events_dir.mkdir(parents=True, exist_ok=True)
 
     def _log_event(self, msg: TeamMessage) -> None:
@@ -53,7 +55,8 @@ class MailboxManager:
             msg.model_dump_json(indent=2, by_alias=True, exclude_none=True),
             encoding="utf-8",
         )
-        tmp.replace(path)
+        import os
+        os.replace(str(tmp), str(path))
 
     def get_event_log(self, limit: int = 100) -> list[TeamMessage]:
         """Read event log (newest first). Non-destructive."""

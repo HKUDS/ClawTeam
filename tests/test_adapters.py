@@ -7,6 +7,7 @@ from clawteam.spawn.adapters import (
     command_basename,
     is_interactive_cli,
     is_opencode_command,
+    is_pi_command,
     is_qwen_command,
 )
 
@@ -27,8 +28,14 @@ class TestCLIDetection:
         assert not is_opencode_command(["openai"])
         assert not is_opencode_command([])
 
+    def test_is_pi_command(self):
+        assert is_pi_command(["pi"])
+        assert is_pi_command(["/usr/local/bin/pi"])
+        assert not is_pi_command(["python"])
+        assert not is_pi_command([])
+
     def test_is_interactive_cli_covers_all_known(self):
-        for cmd in ["claude", "codex", "nanobot", "gemini", "kimi", "qwen", "opencode"]:
+        for cmd in ["claude", "codex", "nanobot", "gemini", "kimi", "qwen", "opencode", "pi"]:
             assert is_interactive_cli([cmd]), f"{cmd} should be interactive"
 
     def test_is_interactive_cli_rejects_unknown(self):
@@ -112,3 +119,37 @@ class TestPrepareCommandPrompt:
         )
         assert result.post_launch_prompt is None
         assert "hello" in result.final_command
+
+
+class TestPiCommand:
+    """pi-coding-agent specific command preparation."""
+
+    adapter = NativeCliAdapter()
+
+    def test_pi_interactive_gets_positional_prompt(self):
+        result = self.adapter.prepare_command(
+            ["pi"], prompt="list files", interactive=True,
+        )
+        # pi takes prompt as positional arg in interactive mode (stays in TUI)
+        assert result.final_command == ["pi", "list files"]
+        assert result.post_launch_prompt is None
+
+    def test_pi_noninteractive_gets_flag(self):
+        result = self.adapter.prepare_command(
+            ["pi"], prompt="list files", interactive=False,
+        )
+        assert result.post_launch_prompt is None
+        assert "-p" in result.final_command
+        assert "list files" in result.final_command
+
+    def test_pi_skip_permissions_no_special_flag(self):
+        result = self.adapter.prepare_command(
+            ["pi"], skip_permissions=True,
+        )
+        # pi is minimal by design, no skip_permissions flag needed
+        assert result.final_command == ["pi"]
+
+    def test_pi_without_prompt_unchanged(self):
+        result = self.adapter.prepare_command(["pi"])
+        assert result.final_command == ["pi"]
+        assert result.post_launch_prompt is None

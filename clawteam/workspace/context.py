@@ -5,13 +5,18 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from clawteam.paths import ensure_within_root, validate_identifier
 from clawteam.team.models import get_data_dir
 from clawteam.workspace import git
 from clawteam.workspace.manager import WorkspaceManager, _load_registry
 
 
 def _registry_repo_root(team_name: str) -> str | None:
-    path = get_data_dir() / "workspaces" / team_name / "workspace-registry.json"
+    path = ensure_within_root(
+        get_data_dir() / "workspaces",
+        validate_identifier(team_name, "team name"),
+        "workspace-registry.json",
+    )
     if not path.exists():
         return None
     try:

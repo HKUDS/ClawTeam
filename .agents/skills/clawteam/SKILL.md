@@ -1,5 +1,5 @@
 ---
-name: ClawTeam Multi-Agent Coordination
+name: ClawTeam
 description: >
   This skill should be used when the user asks to "create a team", "spawn agents",
   "assign tasks", "coordinate multiple agents", "check team status", "view kanban board",

@@ -14,6 +14,7 @@ from clawteam.spawn.tmux_backend import (
     _inject_prompt_via_buffer,
     _wait_for_cli_ready,
 )
+from clawteam.team.routing_policy import RuntimeEnvelope
 
 
 class DummyProcess:
@@ -1155,6 +1156,31 @@ def test_inject_prompt_via_buffer_uses_load_and_paste(monkeypatch, tmp_path):
     assert ["tmux", "delete-buffer", "-b"] in cmds
 
 
+def test_tmux_backend_runtime_injection_returns_false_when_target_missing(monkeypatch):
+    class Result:
+        def __init__(self, returncode=0, stdout="", stderr=""):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = stderr
+
+    def fake_run(args, **kwargs):
+        if args[:3] == ["tmux", "list-panes", "-t"]:
+            return Result(returncode=1, stderr="can't find session")
+        return Result()
+
+    monkeypatch.setattr("clawteam.spawn.tmux_backend.shutil.which", lambda *_args, **_kwargs: "/usr/bin/tmux")
+    monkeypatch.setattr("clawteam.spawn.tmux_backend.subprocess.run", fake_run)
+
+    ok, reason = TmuxBackend().inject_runtime_message(
+        team="demo",
+        agent_name="worker",
+        envelope=RuntimeEnvelope(source="leader", target="worker", summary="hello"),
+    )
+
+    assert ok is False
+    assert "clawteam-demo:worker" in reason
+
+
 # ---------------------------------------------------------------------------
 # End-to-end: qwen & opencode spawn via tmux backend
 # ---------------------------------------------------------------------------
@@ -1347,3 +1373,100 @@ def test_load_skill_content_returns_none_for_missing(tmp_path, monkeypatch):
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
 
     assert _load_skill_content("nonexistent") is None
+
+
+# ---------------------------------------------------------------------------
+# pi system_prompt tests
+# ---------------------------------------------------------------------------
+
+
+def test_subprocess_backend_pi_injects_system_prompt(monkeypatch, tmp_path):
+    """pi gets --append-system-prompt when system_prompt is provided."""
+    clawteam_bin = tmp_path / "bin" / "clawteam"
+    clawteam_bin.parent.mkdir(parents=True)
+    clawteam_bin.write_text("#!/bin/sh\n")
+    monkeypatch.setattr(sys, "argv", [str(clawteam_bin)])
+
+    captured: dict[str, object] = {}
+
+    def fake_popen(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return DummyProcess()
+
+    monkeypatch.setattr(
+        "clawteam.spawn.command_validation.shutil.which",
+        lambda name, path=None: "/usr/bin/pi" if name == "pi" else None,
+    )
+    monkeypatch.setattr("clawteam.spawn.subprocess_backend.subprocess.Popen", fake_popen)
+    monkeypatch.setattr("clawteam.spawn.registry.register_agent", lambda **_: None)
+
+    backend = SubprocessBackend()
+    backend.spawn(
+        command=["pi"],
+        agent_name="worker1",
+        agent_id="agent-1",
+        agent_type="general-purpose",
+        team_name="demo-team",
+        prompt="do work",
+        system_prompt="You are a team worker.",
+    )
+
+    cmd = captured["cmd"]
+    assert "--append-system-prompt" in cmd
+    assert "You are a team worker." in cmd
+
+
+def test_tmux_backend_pi_injects_system_prompt(monkeypatch, tmp_path):
+    """pi in tmux gets --append-system-prompt when system_prompt is provided."""
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    clawteam_bin = tmp_path / "venv" / "bin" / "clawteam"
+    clawteam_bin.parent.mkdir(parents=True)
+    clawteam_bin.write_text("#!/bin/sh\n")
+    monkeypatch.setattr(sys, "argv", [str(clawteam_bin)])
+
+    run_calls: list[list[str]] = []
+
+    class Result:
+        def __init__(self, returncode: int = 0, stdout: str = ""):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = ""
+
+    def fake_run(args, **kwargs):
+        run_calls.append(args)
+        if args[:3] == ["tmux", "has-session", "-t"]:
+            return Result(returncode=1)
+        if args[:3] == ["tmux", "list-panes", "-t"]:
+            return Result(returncode=0, stdout="9876\n")
+        return Result(returncode=0)
+
+    def fake_which(name, path=None):
+        if name == "tmux":
+            return "/usr/bin/tmux"
+        if name == "pi":
+            return "/usr/bin/pi"
+        return None
+
+    monkeypatch.setattr("clawteam.spawn.tmux_backend.shutil.which", fake_which)
+    monkeypatch.setattr("clawteam.spawn.command_validation.shutil.which", fake_which)
+    monkeypatch.setattr("clawteam.spawn.tmux_backend.subprocess.run", fake_run)
+    monkeypatch.setattr("clawteam.spawn.tmux_backend.time.sleep", lambda *_: None)
+    monkeypatch.setattr("clawteam.spawn.tmux_backend.time.monotonic", lambda: 0)
+    monkeypatch.setattr("clawteam.spawn.registry.register_agent", lambda **_: None)
+
+    backend = TmuxBackend()
+    backend.spawn(
+        command=["pi"],
+        agent_name="worker1",
+        agent_id="agent-1",
+        agent_type="general-purpose",
+        team_name="demo-team",
+        prompt="do work",
+        cwd="/tmp/demo",
+        system_prompt="You are a team worker.",
+    )
+
+    new_session = next(c for c in run_calls if c[:3] == ["tmux", "new-session", "-d"])
+    full_cmd = new_session[-1]
+    assert "--append-system-prompt" in full_cmd
+    assert "You are a team worker." in full_cmd

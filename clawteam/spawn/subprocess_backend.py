@@ -6,7 +6,7 @@ import os
 import shlex
 import subprocess
 
-from clawteam.spawn.adapters import NativeCliAdapter, is_claude_command
+from clawteam.spawn.adapters import NativeCliAdapter, is_claude_command, is_pi_command
 from clawteam.spawn.base import SpawnBackend
 from clawteam.spawn.cli_env import build_spawn_path, resolve_clawteam_executable
 from clawteam.spawn.command_validation import validate_spawn_command
@@ -70,7 +70,7 @@ class SubprocessBackend(SpawnBackend):
         normalized_command = prepared.normalized_command
         validation_command = normalized_command
         final_command = list(prepared.final_command)
-        if system_prompt and is_claude_command(normalized_command):
+        if system_prompt and (is_claude_command(normalized_command) or is_pi_command(normalized_command)):
             insert_at = final_command.index("-p") if "-p" in final_command else len(final_command)
             final_command[insert_at:insert_at] = ["--append-system-prompt", system_prompt]
 
@@ -79,13 +79,20 @@ class SubprocessBackend(SpawnBackend):
             return command_error
 
         # Wrap with on-exit hook so task status updates immediately on exit
-        cmd_str = " ".join(shlex.quote(c) for c in final_command)
-        exit_cmd = shlex.quote(clawteam_bin) if os.path.isabs(clawteam_bin) else "clawteam"
-        exit_hook = (
-            f"{exit_cmd} lifecycle on-exit --team {shlex.quote(team_name)} "
-            f"--agent {shlex.quote(agent_name)}"
-        )
-        shell_cmd = f"{cmd_str}; {exit_hook}"
+        import sys
+        if sys.platform == "win32":
+            cmd_str = subprocess.list2cmdline(final_command)
+            exit_cmd = subprocess.list2cmdline([clawteam_bin]) if os.path.isabs(clawteam_bin) else "clawteam"
+            exit_hook = f"{exit_cmd} lifecycle on-exit --team {subprocess.list2cmdline([team_name])} --agent {subprocess.list2cmdline([agent_name])}"
+            shell_cmd = f"{cmd_str} & {exit_hook}"
+        else:
+            cmd_str = " ".join(shlex.quote(c) for c in final_command)
+            exit_cmd = shlex.quote(clawteam_bin) if os.path.isabs(clawteam_bin) else "clawteam"
+            exit_hook = (
+                f"{exit_cmd} lifecycle on-exit --team {shlex.quote(team_name)} "
+                f"--agent {shlex.quote(agent_name)}"
+            )
+            shell_cmd = f"{cmd_str}; {exit_hook}"
 
         process = subprocess.Popen(
             shell_cmd,

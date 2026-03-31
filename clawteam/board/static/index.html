@@ -493,14 +493,32 @@
     let currentEventSource = null;
     let currentTeam = '';
 
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     // Initialize
     async function init() {
         try {
             const res = await fetch('/api/overview');
             const teams = await res.json();
-            
-            teamSelect.innerHTML = '<option value="">Select Team</option>' + 
-                teams.map(t => `<option value="${t.name}">${t.name} ${t.description ? `- ${t.description}` : ''}</option>`).join('');
+
+            teamSelect.replaceChildren();
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = 'Select Team';
+            teamSelect.appendChild(defaultOption);
+            teams.forEach((t) => {
+                const option = document.createElement('option');
+                option.value = t.name || '';
+                option.textContent = `${t.name || ''}${t.description ? ` - ${t.description}` : ''}`;
+                teamSelect.appendChild(option);
+            });
             
             if (teams.length > 0) {
                 teamSelect.value = teams[0].name;
@@ -665,8 +683,8 @@
             <div class="members-grid">
                 ${members.map(m => `
                     <div class="member-card">
-                        <div class="member-name">${m.name}</div>
-                        <div class="member-role">${m.agentType || 'Agent'} ${m.user ? `(${m.user})` : ''}</div>
+                        <div class="member-name">${escapeHtml(m.name)}</div>
+                        <div class="member-role">${escapeHtml(m.agentType || 'Agent')} ${m.user ? `(${escapeHtml(m.user)})` : ''}</div>
                         <div class="member-inbox ${m.inboxCount > 0 ? 'has-msgs' : ''}">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
                             ${m.inboxCount} pending
@@ -692,15 +710,15 @@
                     return `
                     <div class="msg-item" style="animation-delay: ${Math.min(i*0.02, 0.5)}s">
                         <div class="msg-meta">
-                            <span class="msg-tag ${tagClass}">${m.type || 'PROTOCOL'}</span>
+                            <span class="msg-tag ${tagClass}">${escapeHtml(m.type || 'PROTOCOL')}</span>
                             <div class="msg-flow">
-                                <span class="msg-party">${m.fromLabel || m.from || 'SYS'}</span>
+                                <span class="msg-party">${escapeHtml(m.fromLabel || m.from || 'SYS')}</span>
                                 <span class="msg-arrow">${m.isBroadcast ? '↠' : '→'}</span>
-                                <span class="msg-party">${m.toLabel || m.to || 'ALL'}</span>
+                                <span class="msg-party">${escapeHtml(m.toLabel || m.to || 'ALL')}</span>
                             </div>
                             <span class="msg-time">${formatTime(m.timestamp)}</span>
                         </div>
-                        <div class="msg-content">${(m.content || '').replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
+                        <div class="msg-content">${escapeHtml(m.content || '')}</div>
                     </div>
                 `}).join('')}
             </div>`;
@@ -716,10 +734,10 @@
                 '<div style="text-align:center;color:var(--text-tertiary);margin-top:24px;font-size:13px;letter-spacing:0.05em;">NO DATA</div>' :
                 list.map(t => `
                     <div class="task-card ${key === 'blocked' ? 'blocked-card' : ''}">
-                        <div class="task-id">#${(t.id || '').substring(0,8)}</div>
-                        <div class="task-subj">${(t.subject || '').replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
-                        <div class="task-own">${t.owner || 'Unassigned'}</div>
-                        ${key === 'blocked' && t.blockedBy && t.blockedBy.length ? `<div class="blocked-label">Blocked by: ${t.blockedBy.join(', ')}</div>` : ''}
+                        <div class="task-id">#${escapeHtml((t.id || '').substring(0,8))}</div>
+                        <div class="task-subj">${escapeHtml(t.subject || '')}</div>
+                        <div class="task-own">${escapeHtml(t.owner || 'Unassigned')}</div>
+                        ${key === 'blocked' && t.blockedBy && t.blockedBy.length ? `<div class="blocked-label">Blocked by: ${t.blockedBy.map(v => escapeHtml(v)).join(', ')}</div>` : ''}
                     </div>
                 `).join('');
         });

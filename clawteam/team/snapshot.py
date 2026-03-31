@@ -18,6 +18,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from clawteam.fileutil import atomic_write_text
+from clawteam.paths import ensure_within_root, validate_identifier
 from clawteam.team.models import get_data_dir
 
 
@@ -26,7 +28,7 @@ def _now_iso() -> str:
 
 
 def _snapshots_root(team_name: str) -> Path:
-    d = get_data_dir() / "snapshots" / team_name
+    d = ensure_within_root(get_data_dir() / "snapshots", validate_identifier(team_name, "team name"))
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -112,10 +114,11 @@ class SnapshotManager:
     """
 
     def __init__(self, team_name: str):
+        validate_identifier(team_name, "team name")
         self.team_name = team_name
 
     def _team_dir(self) -> Path:
-        return get_data_dir() / "teams" / self.team_name
+        return ensure_within_root(get_data_dir() / "teams", validate_identifier(self.team_name, "team name"))
 
     def create(self, tag: str = "") -> SnapshotMeta:
         """Capture current team state."""
@@ -127,10 +130,19 @@ class SnapshotManager:
             raise ValueError(f"Team '{self.team_name}' not found")
         config = json.loads(config_path.read_text("utf-8"))
 
-        tasks = _read_json_dir(data_dir / "tasks" / self.team_name, "task-*.json")
+        tasks = _read_json_dir(
+            ensure_within_root(data_dir / "tasks", self.team_name),
+            "task-*.json",
+        )
         events = _read_json_dir(team_dir / "events", "evt-*.json")
-        sessions = _read_json_dir(data_dir / "sessions" / self.team_name, "*.json")
-        costs = _read_json_dir(data_dir / "costs" / self.team_name, "cost-*.json")
+        sessions = _read_json_dir(
+            ensure_within_root(data_dir / "sessions", self.team_name),
+            "*.json",
+        )
+        costs = _read_json_dir(
+            ensure_within_root(data_dir / "costs", self.team_name),
+            "cost-*.json",
+        )
 
         # pending inbox messages (not yet consumed)
         inboxes: dict[str, list[dict]] = {}
@@ -167,11 +179,7 @@ class SnapshotManager:
         }
 
         path = _snapshots_root(self.team_name) / f"snap-{snap_id}.json"
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(
-            json.dumps(bundle, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
-        tmp.replace(path)
+        atomic_write_text(path, json.dumps(bundle, indent=2, ensure_ascii=False))
         return meta
 
     def list_snapshots(self) -> list[SnapshotMeta]:
@@ -219,10 +227,10 @@ class SnapshotManager:
         # Restore should replace current team state for this snapshot domain,
         # not overlay on top of newer tasks/events/messages.
         for path in (
-            data_dir / "tasks" / self.team_name,
+            ensure_within_root(data_dir / "tasks", self.team_name),
             team_dir / "events",
-            data_dir / "sessions" / self.team_name,
-            data_dir / "costs" / self.team_name,
+            ensure_within_root(data_dir / "sessions", self.team_name),
+            ensure_within_root(data_dir / "costs", self.team_name),
             team_dir / "inboxes",
         ):
             if path.exists():
@@ -234,7 +242,7 @@ class SnapshotManager:
             _atomic_write(team_dir / "config.json", bundle["config"])
 
         # tasks
-        tasks_dir = data_dir / "tasks" / self.team_name
+        tasks_dir = ensure_within_root(data_dir / "tasks", self.team_name)
         tasks_dir.mkdir(parents=True, exist_ok=True)
         for task in bundle.get("tasks", []):
             tid = task.get("id", "unknown")
@@ -247,14 +255,14 @@ class SnapshotManager:
             _atomic_write(events_dir / f"evt-restored-{i:06d}.json", evt)
 
         # sessions
-        sessions_dir = data_dir / "sessions" / self.team_name
+        sessions_dir = ensure_within_root(data_dir / "sessions", self.team_name)
         sessions_dir.mkdir(parents=True, exist_ok=True)
         for sess in bundle.get("sessions", []):
             name = sess.get("agentName", sess.get("agent_name", "unknown"))
             _atomic_write(sessions_dir / f"{name}.json", sess)
 
         # costs
-        costs_dir = data_dir / "costs" / self.team_name
+        costs_dir = ensure_within_root(data_dir / "costs", self.team_name)
         costs_dir.mkdir(parents=True, exist_ok=True)
         for cost in bundle.get("costs", []):
             cid = cost.get("id", "unknown")
@@ -264,7 +272,10 @@ class SnapshotManager:
         # inbox messages
         inbox_root = team_dir / "inboxes"
         for agent_name, messages in bundle.get("inboxes", {}).items():
-            agent_inbox = inbox_root / agent_name
+            agent_inbox = ensure_within_root(
+                inbox_root,
+                validate_identifier(agent_name, "inbox name"),
+            )
             agent_inbox.mkdir(parents=True, exist_ok=True)
             for j, msg in enumerate(messages):
                 _atomic_write(
@@ -282,6 +293,4 @@ class SnapshotManager:
 
 
 def _atomic_write(path: Path, data: dict) -> None:
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-    tmp.replace(path)
+    atomic_write_text(path, json.dumps(data, indent=2, ensure_ascii=False))

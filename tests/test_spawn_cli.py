@@ -98,9 +98,10 @@ def test_spawn_cli_invalid_backend_hint_mentions_team_flag(monkeypatch, tmp_path
     )
 
     assert result.exit_code == 1
-    assert "the first" in result.output
-    assert "positional argument to `clawteam spawn` is the backend" in result.output
-    assert "--team <name>" in result.output
+    normalized = " ".join(result.output.split())
+    assert "the first" in normalized
+    assert "positional argument to `clawteam spawn` is the backend" in normalized
+    assert "--team <name>" in normalized
 
 
 def test_launch_cli_rejects_removed_acpx_backend(monkeypatch, tmp_path):

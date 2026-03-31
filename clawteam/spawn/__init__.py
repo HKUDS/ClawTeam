@@ -13,8 +13,11 @@ def get_backend(name: str = "tmux") -> SpawnBackend:
     elif name == "tmux":
         from clawteam.spawn.tmux_backend import TmuxBackend
         return TmuxBackend()
+    elif name == "wsh":
+        from clawteam.spawn.wsh_backend import WshBackend
+        return WshBackend()
     else:
-        raise ValueError(f"Unknown spawn backend: {name}. Available: subprocess, tmux")
+        raise ValueError(f"Unknown spawn backend: {name}. Available: subprocess, tmux, wsh")
 
 
 __all__ = ["SpawnBackend", "get_backend"]

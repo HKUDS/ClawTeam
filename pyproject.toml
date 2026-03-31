@@ -24,6 +24,7 @@ dependencies = [
     "rich>=13.0.0,<15.0.0",
     "questionary>=2.0.1,<3.0.0",
     "tomli>=2.0.0; python_version < '3.11'",
+    "mcp>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -37,6 +38,7 @@ p2p = [
 
 [project.scripts]
 clawteam = "clawteam.cli.commands:app"
+clawteam-mcp = "clawteam.mcp.server:main"
 
 [project.urls]
 Homepage = "https://github.com/HKUDS/ClawTeam"

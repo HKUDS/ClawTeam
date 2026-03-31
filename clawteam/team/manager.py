@@ -6,6 +6,7 @@ import json
 import shutil
 from pathlib import Path
 
+from clawteam.paths import ensure_within_root, validate_identifier
 from clawteam.team.models import TeamConfig, TeamMember, get_data_dir
 from clawteam.team.plan import referenced_legacy_plan_paths, team_plans_path
 
@@ -17,7 +18,7 @@ def _teams_root() -> Path:
 
 
 def _team_dir(team_name: str) -> Path:
-    return _teams_root() / team_name
+    return ensure_within_root(_teams_root(), validate_identifier(team_name, "team name"))
 
 
 def _config_path(team_name: str) -> Path:
@@ -42,7 +43,8 @@ def _save_config(config: TeamConfig) -> None:
     tmp.write_text(
         config.model_dump_json(indent=2, by_alias=True), encoding="utf-8"
     )
-    tmp.replace(path)
+    import os
+    os.replace(str(tmp), str(path))
 
 
 class TeamManager:
@@ -76,6 +78,9 @@ class TeamManager:
         user: str = "",
         leader_agent_type: str = "leader",
     ) -> TeamConfig:
+        validate_identifier(name, "team name")
+        validate_identifier(leader_name, "leader name")
+        validate_identifier(user, "user name", allow_empty=True)
         if _config_path(name).exists():
             raise ValueError(f"Team '{name}' already exists")
 
@@ -93,11 +98,11 @@ class TeamManager:
         )
         _save_config(config)
         # Create inboxes dir and leader inbox
-        inbox_name = f"{user}_{leader_name}" if user else leader_name
-        inbox = _team_dir(name) / "inboxes" / inbox_name
+        inbox_name = TeamManager.inbox_name_for(leader)
+        inbox = ensure_within_root(_team_dir(name) / "inboxes", inbox_name)
         inbox.mkdir(parents=True, exist_ok=True)
         # Create tasks dir
-        tasks_dir = get_data_dir() / "tasks" / name
+        tasks_dir = ensure_within_root(get_data_dir() / "tasks", name)
         tasks_dir.mkdir(parents=True, exist_ok=True)
         return config
 
@@ -109,7 +114,10 @@ class TeamManager:
             return teams
         for d in sorted(root.iterdir()):
             if d.is_dir() and (d / "config.json").exists():
-                config = _load_config(d.name)
+                try:
+                    config = _load_config(d.name)
+                except ValueError:
+                    continue
                 if config:
                     teams.append({
                         "name": config.name,
@@ -131,6 +139,9 @@ class TeamManager:
         agent_type: str = "general-purpose",
         user: str = "",
     ) -> TeamMember:
+        validate_identifier(team_name, "team name")
+        validate_identifier(member_name, "member name")
+        validate_identifier(user, "user name", allow_empty=True)
         config = _load_config(team_name)
         if not config:
             raise ValueError(f"Team '{team_name}' not found")
@@ -145,8 +156,8 @@ class TeamManager:
         )
         config.members.append(member)
         _save_config(config)
-        inbox_name = f"{user}_{member_name}" if user else member_name
-        inbox = _team_dir(team_name) / "inboxes" / inbox_name
+        inbox_name = TeamManager.inbox_name_for(member)
+        inbox = ensure_within_root(_team_dir(team_name) / "inboxes", inbox_name)
         inbox.mkdir(parents=True, exist_ok=True)
         return member
 
@@ -174,6 +185,7 @@ class TeamManager:
 
     @staticmethod
     def cleanup(team_name: str) -> bool:
+        validate_identifier(team_name, "team name")
         # Best-effort cleanup of git workspaces before removing dirs
         try:
             from clawteam.workspace import get_workspace_manager
@@ -185,9 +197,9 @@ class TeamManager:
 
         legacy_plan_paths = referenced_legacy_plan_paths(team_name)
         team_dir = _team_dir(team_name)
-        tasks_dir = get_data_dir() / "tasks" / team_name
-        costs_dir = get_data_dir() / "costs" / team_name
-        sessions_dir = get_data_dir() / "sessions" / team_name
+        tasks_dir = ensure_within_root(get_data_dir() / "tasks", team_name)
+        costs_dir = ensure_within_root(get_data_dir() / "costs", team_name)
+        sessions_dir = ensure_within_root(get_data_dir() / "sessions", team_name)
         plans_dir = team_plans_path(team_name)
         cleaned = False
         for d in (team_dir, tasks_dir, costs_dir, sessions_dir, plans_dir):
@@ -211,11 +223,16 @@ class TeamManager:
     @staticmethod
     def inbox_name_for(member: TeamMember) -> str:
         """Return the inbox directory name for a member."""
-        return f"{member.user}_{member.name}" if member.user else member.name
+        user = validate_identifier(member.user, "user name", allow_empty=True)
+        name = validate_identifier(member.name, "member name")
+        return f"{user}_{name}" if user else name
 
     @staticmethod
     def resolve_inbox(team_name: str, recipient: str, user: str = "") -> str:
         """Resolve a logical agent name to its on-disk inbox directory."""
+        validate_identifier(team_name, "team name")
+        validate_identifier(recipient, "recipient name")
+        validate_identifier(user, "user name", allow_empty=True)
         member = TeamManager.get_member(team_name, recipient, user=user)
         if member:
             return TeamManager.inbox_name_for(member)

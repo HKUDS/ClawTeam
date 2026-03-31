@@ -8,6 +8,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from clawteam.fileutil import atomic_write_text
+
 
 class AgentProfile(BaseModel):
     """Reusable agent runtime profile for spawn/launch."""
@@ -41,6 +43,7 @@ class ClawTeamConfig(BaseModel):
     default_team: str = ""
     default_profile: str = ""
     transport: str = ""
+    task_store: str = ""  # "file" (default) — extensible for redis/sql later
     workspace: str = "auto"  # "auto" | "always" | "never" | ""
     default_backend: str = "tmux"  # "tmux" | "subprocess"
     skip_permissions: bool = True  # pass --dangerously-skip-permissions to claude
@@ -72,12 +75,8 @@ def load_config() -> ClawTeamConfig:
 
 
 def save_config(cfg: ClawTeamConfig) -> None:
-    """Atomically write config to disk (tmp + rename)."""
-    p = config_path()
-    p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(cfg.model_dump_json(indent=2), encoding="utf-8")
-    tmp.replace(p)
+    """Atomically write config to disk (mkstemp + replace)."""
+    atomic_write_text(config_path(), cfg.model_dump_json(indent=2))
 
 
 def get_effective(key: str) -> tuple[str, str]:
@@ -91,6 +90,7 @@ def get_effective(key: str) -> tuple[str, str]:
         "default_team": "CLAWTEAM_TEAM_NAME",
         "default_profile": "CLAWTEAM_DEFAULT_PROFILE",
         "transport": "CLAWTEAM_TRANSPORT",
+        "task_store": "CLAWTEAM_TASK_STORE",
         "workspace": "CLAWTEAM_WORKSPACE",
         "default_backend": "CLAWTEAM_DEFAULT_BACKEND",
         "skip_permissions": "CLAWTEAM_SKIP_PERMISSIONS",

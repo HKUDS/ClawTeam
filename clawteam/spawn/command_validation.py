@@ -99,6 +99,11 @@ def is_opencode_command(command: list[str]) -> bool:
     return _cmd_basename(command) == "opencode"
 
 
+def is_pi_command(command: list[str]) -> bool:
+    """Check if the command is a pi-coding-agent CLI invocation."""
+    return _cmd_basename(command) == "pi"
+
+
 def is_interactive_cli(command: list[str]) -> bool:
     """Check if the command is an interactive AI CLI."""
     return (
@@ -109,6 +114,7 @@ def is_interactive_cli(command: list[str]) -> bool:
         or is_kimi_command(command)
         or is_qwen_command(command)
         or is_opencode_command(command)
+        or is_pi_command(command)
     )
 
 
