@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from clawteam.fileutil import atomic_write_text, file_locked
 from clawteam.team.models import get_data_dir
 
 _RECENT_EVENT_LIMIT = 50
@@ -97,8 +96,15 @@ class DefaultRoutingPolicy(RoutingPolicy):
         self.team_name = team_name
         self.throttle_seconds = throttle_seconds
 
+    def _state_lock(self):
+        return file_locked(_runtime_state_path(self.team_name))
+
     def decide(self, envelope: RuntimeEnvelope, now: datetime | str | None = None) -> RouteDecision:
         now_dt = _ensure_datetime(now)
+        with self._state_lock():
+            return self._decide_locked(envelope, now_dt)
+
+    def _decide_locked(self, envelope: RuntimeEnvelope, now_dt: datetime) -> RouteDecision:
         state = self.read_state()
         route_key = self._route_key(envelope.source, envelope.target)
         route = state["routes"].setdefault(route_key, self._empty_route(envelope))
@@ -162,6 +168,10 @@ class DefaultRoutingPolicy(RoutingPolicy):
         now: datetime | str | None = None,
     ) -> list[RouteDecision]:
         now_dt = _ensure_datetime(now)
+        with self._state_lock():
+            return self._flush_due_locked(target_agent, now_dt)
+
+    def _flush_due_locked(self, target_agent: str | None, now_dt: datetime) -> list[RouteDecision]:
         state = self.read_state()
         decisions: list[RouteDecision] = []
 
@@ -211,6 +221,17 @@ class DefaultRoutingPolicy(RoutingPolicy):
         error: str = "",
     ) -> None:
         now_dt = _ensure_datetime(now)
+        with self._state_lock():
+            self._record_dispatch_result_locked(decision, success=success, now_dt=now_dt, error=error)
+
+    def _record_dispatch_result_locked(
+        self,
+        decision: RouteDecision,
+        *,
+        success: bool,
+        now_dt: datetime,
+        error: str = "",
+    ) -> None:
         state = self.read_state()
         route = state["routes"].setdefault(
             decision.route_key,
@@ -273,21 +294,10 @@ class DefaultRoutingPolicy(RoutingPolicy):
 
     def _save_state(self, state: dict[str, Any]) -> None:
         path = _runtime_state_path(self.team_name)
-        path.parent.mkdir(parents=True, exist_ok=True)
         state["team"] = self.team_name
         state["throttleSeconds"] = self.throttle_seconds
         state["updatedAt"] = _utcnow().isoformat()
-
-        fd, tmp_name = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                json.dump(state, handle, indent=2, ensure_ascii=False)
-            Path(tmp_name).replace(path)
-        finally:
-            try:
-                Path(tmp_name).unlink(missing_ok=True)
-            except OSError:
-                pass
+        atomic_write_text(path, json.dumps(state, indent=2, ensure_ascii=False))
 
     @staticmethod
     def _route_key(source: str, target: str) -> str:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from datetime import datetime
 
 from clawteam.spawn.tmux_backend import TmuxBackend
@@ -50,7 +49,7 @@ class RuntimeRouter:
             evidence.append(f"requestId: {message.request_id}")
 
         summary = (message.content or "").strip() or f"{message.type.value} from {source}"
-        payload = json.loads(message.model_dump_json(by_alias=True, exclude_none=True))
+        payload = message.model_dump(by_alias=True, exclude_none=True)
 
         return RuntimeEnvelope(
             source=source,
