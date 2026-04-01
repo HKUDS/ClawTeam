@@ -69,6 +69,28 @@ def _cmux_workspace_exists(name: str) -> bool:
     return False
 
 
+def _resolve_repo_slug(directory: str) -> str | None:
+    """Resolve OWNER/REPO from git remote origin URL for verify_outcome."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", directory, "remote", "get-url", "origin"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode != 0:
+            return None
+        url = result.stdout.strip().rstrip("/").removesuffix(".git")
+        # git@github.com:OWNER/REPO.git -> OWNER/REPO
+        if ":" in url and "@" in url:
+            return url.split(":")[-1]
+        # https://github.com/OWNER/REPO.git -> OWNER/REPO
+        parts = url.split("/")
+        if len(parts) >= 2:
+            return "/".join(parts[-2:])
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+    return None
+
+
 def _cmux_get_current_workspace() -> str | None:
     """Return the currently focused workspace ref, or None."""
     try:
@@ -267,6 +289,10 @@ class CmuxBackend(SpawnBackend):
         })
         if cwd:
             env_vars["CLAWTEAM_WORKSPACE_DIR"] = cwd
+        # Resolve repo slug for verify_outcome in exit trap
+        repo_slug = _resolve_repo_slug(cwd or os.getcwd())
+        if repo_slug:
+            env_vars["CLAWTEAM_REPO_SLUG"] = repo_slug
         # Inject context awareness flags
         env_vars["CLAWTEAM_CONTEXT_ENABLED"] = "1"
         if env:
@@ -310,41 +336,56 @@ class CmuxBackend(SpawnBackend):
             f.write(f"export _CMUX_CLOSE_CMD={shlex.quote(f'{_CMUX_BIN} close-workspace --workspace {workspace_name}')}\n")
 
         cmd_str = " ".join(shlex.quote(c) for c in final_command)
-        # On-exit hook: runs when agent process exits.
-        # Capture exit code and include it in the DONE message so parents can
-        # distinguish clean exits from crashes.  Only send the fallback DONE if
-        # the agent didn't already post one (avoids duplicate messages).
+        # On-exit trap: fires on ANY exit (including SIGTERM/SIGHUP), unlike
+        # the old ;-chain which died with the shell on signals.
         exit_cmd = shlex.quote(clawteam_bin) if os.path.isabs(clawteam_bin) else "clawteam"
-        exit_hook = (
-            f"_ec=$?; "
-            f"_already=$({exit_cmd} inbox peek {shlex.quote(team_name)} "
-            f"--agent leader 2>/dev/null | grep -cF 'DONE: {agent_name}' || true); "
-            f'if [ "$_already" = "0" ]; then '
-            f"{exit_cmd} inbox send {shlex.quote(team_name)} leader "
-            f"\"DONE: {agent_name} exited (exit_code=$_ec)\" -f {shlex.quote(agent_name)} 2>/dev/null; "
-            f"fi; "
-            f"{exit_cmd} lifecycle on-exit --team {shlex.quote(team_name)} "
-            f"--agent {shlex.quote(agent_name)}"
-        )
-        # Auto-close cmux workspace after agent exits + cleanup badges.
-        ws_name = f"{team_name}-{agent_name}"
         # Clear sidebar badges on exit. Use $CMUX_WORKSPACE_ID which cmux
         # auto-sets in every shell it spawns — works for both workspace and surface mode.
         badge_cleanup = (
-            f"{shlex.quote(_CMUX_BIN)} clear-status agent-{agent_name} --workspace \"$CMUX_WORKSPACE_ID\" 2>/dev/null"
+            f"{shlex.quote(_CMUX_BIN)} clear-status agent-{agent_name}"
+            f' --workspace "$CMUX_WORKSPACE_ID" 2>/dev/null'
         )
-        cmux_cleanup = (
+        # Build _on_exit function body — runs as trap EXIT handler.
+        # verify_outcome: three-state PR merge check (only when completion_mode=explicit)
+        verify_outcome = (
+            'if [ "${CLAWTEAM_COMPLETION_MODE:-}" = "explicit" ] '
+            '&& [ -n "${CLAWTEAM_REPO_SLUG:-}" ]; then '
+            '_branch=$(git branch --show-current 2>/dev/null); '
+            '_merged=$(timeout 5 gh pr list --repo "$CLAWTEAM_REPO_SLUG" '
+            '--head "$_branch" --state merged --json number -L 1 2>/dev/null); '
+            '_gh_rc=$?; '
+            'if [ -n "$_merged" ] && [ "$_merged" != "[]" ]; then _outcome=DONE; '
+            'elif [ "$_gh_rc" -eq 0 ]; then _outcome=EXITED; '
+            'else _outcome=UNKNOWN; fi; '
+            'fi'
+        )
+        on_exit_body = (
+            f"_ec=$?; "
+            f"{verify_outcome}; "
+            # Dedup: only send DONE if agent hasn't already posted one
+            f"_already=$({exit_cmd} inbox peek {shlex.quote(team_name)} "
+            f"--agent leader 2>/dev/null | grep -cF 'DONE: {agent_name}' || true); "
+            f'if [ "$_already" = "0" ]; then '
+            # Include outcome in message when available
+            f'_msg="DONE: {agent_name} exited (exit_code=$_ec${{_outcome:+, outcome=$_outcome}})"; '
+            f"{exit_cmd} inbox send {shlex.quote(team_name)} leader "
+            f'"$_msg" -f {shlex.quote(agent_name)} 2>/dev/null; '
+            f"fi; "
+            f"{exit_cmd} lifecycle on-exit --team {shlex.quote(team_name)} "
+            f"--agent {shlex.quote(agent_name)}; "
             f"{badge_cleanup}; "
-            f"echo '\\n[Agent exited. Workspace closes in 30s. Press Ctrl-C to keep.]'; "
-            f"sleep 30 && eval \"$_CMUX_CLOSE_CMD\" 2>/dev/null"
+            f"printf '\\n[Agent exited. Workspace closes in 30s. Press Ctrl-C to keep.]\\n'; "
+            f'sleep 30 && eval "$_CMUX_CLOSE_CMD" 2>/dev/null'
         )
+        exit_trap = f"_on_exit() {{ {on_exit_body}; }}; trap _on_exit EXIT"
         # Source env from file (secrets stay off terminal), then delete the file
         env_source = f". {shlex.quote(env_path)} && rm -f {shlex.quote(env_path)}"
         unset_clause = "unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_SESSION 2>/dev/null; "
+        # Trap is set BEFORE the command — fires on any exit including signals
         if cwd:
-            full_cmd = f"{unset_clause}{env_source}; cd {shlex.quote(cwd)} || exit 1; {cmd_str}; {exit_hook}; {cmux_cleanup}"
+            full_cmd = f"{unset_clause}{env_source}; cd {shlex.quote(cwd)} || exit 1; {exit_trap}; {cmd_str}"
         else:
-            full_cmd = f"{unset_clause}{env_source}; {cmd_str}; {exit_hook}; {cmux_cleanup}"
+            full_cmd = f"{unset_clause}{env_source}; {exit_trap}; {cmd_str}"
 
         # Unified launcher script for both modes (G1, G4)
         launcher_path = _prepare_launcher(full_cmd)
