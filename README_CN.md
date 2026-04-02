@@ -1,8 +1,8 @@
-<h1 align="center"><img src="assets/icon.png" alt="" width="64" style="vertical-align: middle;">&nbsp; OpenHarness：Agent 群体智能</h1>
+<h1 align="center"><img src="assets/icon.png" alt="" width="64" style="vertical-align: middle;">&nbsp; ClawTeam：Agent 群体智能</h1>
 
 <p align="center">
   <strong>今天的 Agent 各自为战 🤖，明天的 Agent 将协同作战 🦞🤖🤖🤖<br>
-  OpenHarness：让 AI Agent 自主组建团队、分配任务、协同工作的 CLI 工具</strong>
+  ClawTeam：让 AI Agent 自主组建团队、分配任务、协同工作的 CLI 工具</strong>
 </p>
 
 <p align="center">
@@ -27,9 +27,9 @@
 
 ## 📰 News
 
-**2026-03-18** OpenHarness 项目正式公开发布。
+**2026-03-18** ClawTeam 项目正式公开发布。
 
-**2026-03-23** OpenHarness `v0.2.0` 今日发布。
+**2026-03-23** ClawTeam `v0.2.0` 今日发布。
 
 **2026-03** 当前能力基线已包含配置管理、多用户协作、Web UI、P2P 传输与团队模板。
 
@@ -59,7 +59,7 @@ https://github.com/user-attachments/assets/fd23be91-5cf4-457c-a77e-bac24b76e58f
 🧠 系统会在团队之间汇总突破、持续调整策略，实现无需人工介入的研究自动化。
 
 <p align="center">
-  <img src="assets/teaser.png" alt="OpenHarness - Agent 群体智能" width="800">
+  <img src="assets/teaser.png" alt="ClawTeam - Agent 群体智能" width="800">
 </p>
 
 ---
@@ -133,13 +133,13 @@ https://github.com/user-attachments/assets/fd23be91-5cf4-457c-a77e-bac24b76e58f
 
 ---
 
-## 🤔 为什么需要 OpenHarness？
+## 🤔 为什么需要 ClawTeam？
 
 AI 编程 Agent 很强大 —— 但它们**各自为战**。当任务太大时，你只能手动拆分工作、复制粘贴上下文、合并结果。
 
 **如果 Agent 能自己组队呢？**
 
-OpenHarness 实现了 **Agent 群体智能（Swarm Intelligence）**—— Agent 自主组建团队、分工协作、共享发现、收敛到最优方案。一个 Leader Agent 可以：
+ClawTeam 实现了 **Agent 群体智能（Swarm Intelligence）**—— Agent 自主组建团队、分工协作、共享发现、收敛到最优方案。一个 Leader Agent 可以：
 
 - 🚀 **创建子 Agent** —— 每个子 Agent 拥有独立的 Git Worktree 和 tmux 会话
 - 📋 **分配任务** —— 支持依赖链，完成时自动解除下游阻塞
@@ -150,7 +150,7 @@ OpenHarness 实现了 **Agent 群体智能（Swarm Intelligence）**—— Agent
 人类只需提供初始目标，**群体智能完成剩下的一切。**
 
 <p align="center">
-  <img src="assets/comic-how-it-works.png" alt="OpenHarness 工作流程" width="700">
+  <img src="assets/comic-how-it-works.png" alt="ClawTeam 工作流程" width="700">
 </p>
 
 ---
@@ -202,7 +202,7 @@ oh board serve --port 8080
 </tr>
 </table>
 
-| | OpenHarness | 其他多 Agent 框架 |
+| | ClawTeam | 其他多 Agent 框架 |
 |---|---------|-----------------|
 | 🎯 **使用者** | **AI Agent 自身** | 人类编写编排代码 |
 | ⚡ **搭建** | `pip install` + 一句提示词 | Docker、云 API、YAML 配置 |
@@ -311,11 +311,11 @@ oh launch hedge-fund --team fund1 --goal "分析 AAPL、MSFT、NVDA 的 Q2 2026 
 ## 📦 安装
 
 ```bash
-pip install openharness
+pip install clawteam
 
 # 或从源码安装
-git clone https://github.com/HKUDS/OpenHarness.git
-cd OpenHarness
+git clone https://github.com/HKUDS/ClawTeam.git
+cd ClawTeam
 pip install -e .
 
 # 可选：P2P 传输（ZeroMQ）
@@ -330,7 +330,7 @@ pip install -e ".[p2p]"
 
 ## 🚀 快速开始
 
-如果你是第一次用 OpenHarness，建议按这个顺序：
+如果你是第一次用 ClawTeam，建议按这个顺序：
 
 1. 先确认 `tmux` 和你的 agent CLI 本机能单独跑起来。
 2. 选一条路径：让 agent 驱动，或者你自己手动驱动。
@@ -355,11 +355,11 @@ nanobot --help
 
 ### ⚡ 方式一：让 Agent 驱动（推荐）
 
-OpenHarness 自带一个可复用的 skill，位于 `skills/openharness/`。
+ClawTeam 自带一个可复用的 skill，位于 `skills/clawteam/`。
 
 **Claude Code**
 
-把这个 skill 安装到 `~/.claude/skills/openharness`，然后直接告诉你的 Agent：
+把这个 skill 安装到 `~/.claude/skills/clawteam`，然后直接告诉你的 Agent：
 
 ```
 "帮我做一个 Web 应用。用 oh 把工作拆分给多个 Agent。"
@@ -367,7 +367,7 @@ OpenHarness 自带一个可复用的 skill，位于 `skills/openharness/`。
 
 **Codex**
 
-把同一个 skill 安装到 `$CODEX_HOME/skills/openharness`（通常是 `~/.codex/skills/openharness`），然后提示：
+把同一个 skill 安装到 `$CODEX_HOME/skills/clawteam`（通常是 `~/.codex/skills/clawteam`），然后提示：
 
 ```
 用 $oh 把这个任务拆成多 Agent 团队，协调执行直到完成。
@@ -451,15 +451,15 @@ oh spawn tmux --profile claude-kimi --team my-team --agent-name dave --task "重
 
 - `tmux` 是默认 backend，适合需要保留交互式 TUI、并且想直接观察 agent 工作过程的场景。
 - `subprocess` 更适合一次性工具或非交互脚本。
-- `nanobot` 在 OpenHarness 内部会自动规范化为 `nanobot agent`，上面的写法就是正确入口。
+- `nanobot` 在 ClawTeam 内部会自动规范化为 `nanobot agent`，上面的写法就是正确入口。
 - Claude Code 和 Codex 在全新 worktree 里的 trust prompt，tmux backend 会自动确认。
 - 如果你用的是非默认 provider / 模型，优先使用 `--profile <name>`，不要每次手工拼环境变量。
 
 ### 🔌 接入别的 Agent 要满足什么？
 
-除了 Claude Code、Codex、nanobot 之外，OpenHarness 也能接别的 CLI agent，但至少要满足这几个条件：
+除了 Claude Code、Codex、nanobot 之外，ClawTeam 也能接别的 CLI agent，但至少要满足这几个条件：
 
-1. 命令在 `PATH` 里能找到，并且脱离 OpenHarness 也能正常启动。
+1. 命令在 `PATH` 里能找到，并且脱离 ClawTeam 也能正常启动。
 2. 能在指定工作目录或 git worktree 里运行。
 3. 能接收初始任务，方式可以是命令行参数，也可以是交互输入。
 4. 如果是交互式 agent，启动后不能立刻退出，得能留在 `tmux` 里。
@@ -562,20 +562,20 @@ oh spawn subprocess <your-agent> --team my-team --agent-name test --task "Say OK
 ## 📖 致谢
 
 - [@karpathy/autoresearch](https://github.com/karpathy/autoresearch) — 8 Agent 群体实验的基础框架
-- [Claude Code](https://claude.ai/claude-code) 和 [Codex](https://openai.com/codex) — 作为 OpenHarness 团队成员的 AI 编程 Agent
+- [Claude Code](https://claude.ai/claude-code) 和 [Codex](https://openai.com/codex) — 作为 ClawTeam 团队成员的 AI 编程 Agent
 - [ai-hedge-fund](https://github.com/virattt/ai-hedge-fund) — AI 对冲基金模板的灵感来源
 - [CLI-Anything](https://github.com/HKUDS/CLI-Anything) — 姊妹项目，让所有软件都能被 Agent 使用
 
 ## ⭐ Star History
 
-如果 OpenHarness 帮助你的 AI Agent 协同工作，给我们一个 star ⭐
+如果 ClawTeam 帮助你的 AI Agent 协同工作，给我们一个 star ⭐
 
 <div align="center">
-  <a href="https://star-history.com/#HKUDS/OpenHarness&Date">
+  <a href="https://star-history.com/#HKUDS/ClawTeam&Date">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=HKUDS/OpenHarness&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=HKUDS/OpenHarness&type=Date" />
-      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=HKUDS/OpenHarness&type=Date" />
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=HKUDS/ClawTeam&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=HKUDS/ClawTeam&type=Date" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=HKUDS/ClawTeam&type=Date" />
     </picture>
   </a>
 </div>
@@ -590,17 +590,17 @@ MIT
 
 <div align="center">
 
-**OpenHarness** — *Agent 群体智能* 🦞
+**ClawTeam** — *Agent 群体智能* 🦞
 
 <sub>8 Agent × 8 H100 × 2430 实验 × 一个 CLI × 一个群体</sub>
 
 <br>
 
-<img src="assets/icon.png" alt="OpenHarness" width="80">
+<img src="assets/icon.png" alt="ClawTeam" width="80">
 
 </div>
 
 <p align="center">
-  <em>感谢访问 ✨ OpenHarness！</em><br><br>
-  <img src="https://visitor-badge.laobi.icu/badge?page_id=HKUDS.OpenHarness&style=for-the-badge&color=00d4ff" alt="Views">
+  <em>感谢访问 ✨ ClawTeam！</em><br><br>
+  <img src="https://visitor-badge.laobi.icu/badge?page_id=HKUDS.ClawTeam&style=for-the-badge&color=00d4ff" alt="Views">
 </p>

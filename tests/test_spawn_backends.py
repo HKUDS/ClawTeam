@@ -867,6 +867,20 @@ def test_resolve_clawteam_executable_ignores_unrelated_argv0(monkeypatch, tmp_pa
     assert build_spawn_path("/usr/bin:/bin").startswith(f"{resolved_bin.parent}:")
 
 
+def test_resolve_clawteam_executable_rejects_legacy_openharness_argv0(monkeypatch, tmp_path):
+    legacy = tmp_path / "openharness"
+    legacy.write_text("#!/bin/sh\n")
+    resolved_bin = tmp_path / "bin" / "clawteam"
+    resolved_bin.parent.mkdir(parents=True)
+    resolved_bin.write_text("#!/bin/sh\n")
+
+    monkeypatch.setattr(sys, "argv", [str(legacy)])
+    monkeypatch.setattr("clawteam.spawn.cli_env.shutil.which", lambda name: str(resolved_bin))
+
+    assert resolve_clawteam_executable() == str(resolved_bin)
+    assert build_spawn_path("/usr/bin:/bin").startswith(f"{resolved_bin.parent}:")
+
+
 def test_resolve_clawteam_executable_ignores_relative_argv0_even_if_local_file_exists(
     monkeypatch, tmp_path
 ):

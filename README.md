@@ -1,8 +1,8 @@
-<h1 align="center"><img src="assets/icon.png" alt="" width="64" style="vertical-align: middle;">&nbsp; OpenHarness: Agent Swarm Intelligence</h1>
+<h1 align="center"><img src="assets/icon.png" alt="" width="64" style="vertical-align: middle;">&nbsp; ClawTeam: Agent Swarm Intelligence</h1>
 
 <p align="center">
   <strong>The Evolution of AI Agents 🚀: Solo 🤖 → Swarm 🦞🤖🤖🤖<br>
-  OpenHarness: Let AI Agents Form Swarms, Think & Work Together, and Ship Faster</strong>
+  ClawTeam: Let AI Agents Form Swarms, Think & Work Together, and Ship Faster</strong>
 </p>
 
 <p align="center">
@@ -31,15 +31,15 @@ Full compatibility with [Claude Code](https://claude.ai/claude-code), [Codex](ht
 
 ## 📰 News
 
-**2026-03-18** OpenHarness project launched publicly.
+**2026-03-18** ClawTeam project launched publicly.
 
-**2026-03-23** OpenHarness `v0.2.0` is released today.
+**2026-03-23** ClawTeam `v0.2.0` is released today.
 
 **2026-03** The current baseline includes config management, multi-user workflows, Web UI, P2P transport, and team templates.
 
 ---
 
-## ✨ OpenHarness's Key Features
+## ✨ ClawTeam's Key Features
 
 <table align="center" width="100%">
 <tr>
@@ -149,18 +149,18 @@ https://github.com/user-attachments/assets/fd23be91-5cf4-457c-a77e-bac24b76e58f
 🧠 The system synthesizes breakthroughs across teams and evolves strategies independently — achieving full research automation without human intervention.
 
 <p align="center">
-  <img src="assets/teaser.png" alt="OpenHarness - AI agents orchestrating themselves" width="800">
+  <img src="assets/teaser.png" alt="ClawTeam - AI agents orchestrating themselves" width="800">
 </p>
 
 ---
 
-## 🤔 Why OpenHarness?
+## 🤔 Why ClawTeam?
 
 Current AI agents are powerful — but they work in **isolation**. When facing complex tasks, you're stuck manually coordinating multiple agents, juggling context, and stitching together fragmented results.
 
 **What if agents could think and work as a team?**
 
-OpenHarness unlocks **Agent Swarm Intelligence** — where AI agents self-organize into collaborative teams, intelligently divide complex work, share insights in real-time, and converge on breakthrough solutions.
+ClawTeam unlocks **Agent Swarm Intelligence** — where AI agents self-organize into collaborative teams, intelligently divide complex work, share insights in real-time, and converge on breakthrough solutions.
 
 • **🚀 Spawns specialized sub-agents** — each with dedicated environments and focus areas
 
@@ -176,7 +176,7 @@ OpenHarness unlocks **Agent Swarm Intelligence** — where AI agents self-organi
 You set the vision. The swarm executes with collective intelligence.
 
 <p align="center">
-  <img src="assets/comic-how-it-works.png" alt="How OpenHarness works - comic" width="700">
+  <img src="assets/comic-how-it-works.png" alt="How ClawTeam works - comic" width="700">
 </p>
 
 ---
@@ -228,7 +228,7 @@ oh board serve --port 8080
 </tr>
 </table>
 
-| | OpenHarness | Other multi-agent frameworks |
+| | ClawTeam | Other multi-agent frameworks |
 |---|---------|----------------------------|
 | 🎯 **Who uses it** | **The AI agents themselves** | Humans writing orchestration code |
 | ⚡ **Setup** | `pip install` + one prompt to the leader | Docker, cloud APIs, YAML configs |
@@ -362,11 +362,11 @@ Templates are TOML files — **create your own team archetypes** for any domain.
 ## 📦 Install
 
 ```bash
-pip install openharness
+pip install clawteam
 
 # Or from source
-git clone https://github.com/HKUDS/OpenHarness.git
-cd OpenHarness
+git clone https://github.com/HKUDS/ClawTeam.git
+cd ClawTeam
 pip install -e .
 
 # Optional: P2P transport (ZeroMQ)
@@ -381,7 +381,7 @@ All `spawn` examples assume the agent CLI you name is already installed and avai
 
 ## 🚀 Quick Start
 
-If you're new to OpenHarness, follow this order:
+If you're new to ClawTeam, follow this order:
 
 1. Make sure `tmux` and your agent CLI run standalone on this machine.
 2. Pick one path below: let an agent drive, or drive it manually.
@@ -406,11 +406,11 @@ If the agent CLI does not run correctly by itself, `oh spawn` will not fix it.
 
 ### ⚡ Option 1: Let the Agent Drive (Recommended)
 
-OpenHarness ships with a reusable skill in `skills/openharness/`.
+ClawTeam ships with a reusable skill in `skills/clawteam/`.
 
 **Claude Code**
 
-Install the skill into `~/.claude/skills/openharness`, then prompt:
+Install the skill into `~/.claude/skills/clawteam`, then prompt:
 
 ```
 "Build a web app. Use oh to split the work across multiple agents."
@@ -418,7 +418,7 @@ Install the skill into `~/.claude/skills/openharness`, then prompt:
 
 **Codex**
 
-Install the same skill into `$CODEX_HOME/skills/openharness` (typically `~/.codex/skills/openharness`), then prompt:
+Install the same skill into `$CODEX_HOME/skills/clawteam` (typically `~/.codex/skills/clawteam`), then prompt:
 
 ```
 Use $oh to split this task across multiple agents and coordinate the team to completion.
@@ -504,16 +504,16 @@ Notes:
 
 - `tmux` is the default backend and is the best choice when you want to watch interactive agent UIs.
 - `subprocess` is better for one-shot tools or non-interactive scripts.
-- `nanobot` is normalized internally to `nanobot agent`, so the command above is the correct OpenHarness entrypoint.
+- `nanobot` is normalized internally to `nanobot agent`, so the command above is the correct ClawTeam entrypoint.
 - Claude Code and Codex trust prompts in fresh worktrees are auto-confirmed by the tmux backend.
 - For non-default providers/models, prefer `--profile <name>` over manually exporting env vars inline.
 
 ### 🔌 Adding a Different Agent
 
-OpenHarness can work with agents beyond Claude Code, Codex, and nanobot, but the CLI
+ClawTeam can work with agents beyond Claude Code, Codex, and nanobot, but the CLI
 must satisfy a small compatibility contract:
 
-1. The command must exist on `PATH` and launch successfully outside OpenHarness.
+1. The command must exist on `PATH` and launch successfully outside ClawTeam.
 2. The agent must be able to run inside a specific working directory or git worktree.
 3. The agent must accept an initial task, either by command-line argument or interactive input.
 4. The process must stay alive in `tmux` if it is meant to be interactive.
@@ -528,7 +528,7 @@ If that works, switch to `tmux` for interactive monitoring.
 
 ### 🤖 Supported Agents
 
-OpenHarness works with **any CLI agent** that can execute shell commands:
+ClawTeam works with **any CLI agent** that can execute shell commands:
 
 All examples below assume the corresponding CLI already runs standalone on your machine.
 
@@ -610,7 +610,7 @@ Vertex, use `profile` + `preset` and then spawn with `--profile`.
 
 ---
 
-## 🤖 How Agents Use OpenHarness
+## 🤖 How Agents Use ClawTeam
 
 When an agent is spawned via `oh spawn`, it receives an **auto-injected coordination prompt**:
 
@@ -626,7 +626,7 @@ When an agent is spawned via `oh spawn`, it receives an **auto-injected coordina
 - 😴 Report idle:      oh lifecycle idle <team>
 ```
 
-This means **any CLI agent** can participate in a OpenHarness team — it just needs to run shell commands. No custom SDK, no API integration, no framework lock-in.
+This means **any CLI agent** can participate in a ClawTeam team — it just needs to run shell commands. No custom SDK, no API integration, no framework lock-in.
 
 ---
 
@@ -699,7 +699,7 @@ oh config health
 
 | Setting | Env Var | Default | Description |
 |---------|---------|---------|-------------|
-| `data_dir` | `OH_DATA_DIR` | `~/.openharness` | Data directory |
+| `data_dir` | `CLAWTEAM_DATA_DIR` | `~/.clawteam` | Data directory |
 | `transport` | `OH_TRANSPORT` | `file` | `file` or `p2p` |
 | `workspace` | `OH_WORKSPACE` | `auto` | `auto` / `always` / `never` |
 | `default_backend` | `OH_DEFAULT_BACKEND` | `tmux` | `tmux` or `subprocess` |
@@ -738,7 +738,7 @@ oh config health
                          │
                          ▼
               ┌─────────────────────┐
-              │    ~/.openharness/     │
+              │    ~/.clawteam/     │
               │ ├── teams/   (who) │
               │ ├── tasks/   (what)│
               │ ├── inboxes/ (talk)│
@@ -747,7 +747,7 @@ oh config health
               └─────────────────────┘
 ```
 
-All state lives in `~/.openharness/` as JSON files. No database, no server, no cloud. Atomic `tmp + rename` writes ensure crash safety.
+All state lives in `~/.clawteam/` as JSON files. No database, no server, no cloud. Atomic `tmp + rename` writes ensure crash safety.
 
 | Spawn Default | Value | Override |
 |---------------|-------|----------|
@@ -788,7 +788,7 @@ For the longer-term plan, see [ROADMAP.md](ROADMAP.md).
 
 ## 🤝 Contributing
 
-We welcome contributions! OpenHarness is designed to be extensible:
+We welcome contributions! ClawTeam is designed to be extensible:
 
 - 🤖 **New agent integrations** — Add support for more AI coding agents
 - 🎪 **Team templates** — Create TOML templates for new domains (DevOps, data science, etc.)
@@ -801,7 +801,7 @@ We welcome contributions! OpenHarness is designed to be extensible:
 ## 📖 Acknowledgements
 
 - [@karpathy/autoresearch](https://github.com/karpathy/autoresearch) — the autonomous ML research framework used in our 8-agent swarm demo
-- [Claude Code](https://claude.ai/claude-code) and [Codex](https://openai.com/codex) — AI coding agents that work as OpenHarness team members
+- [Claude Code](https://claude.ai/claude-code) and [Codex](https://openai.com/codex) — AI coding agents that work as ClawTeam team members
 - [ai-hedge-fund](https://github.com/virattt/ai-hedge-fund) — inspiration for the multi-analyst hedge fund template
 - [CLI-Anything](https://github.com/HKUDS/CLI-Anything) — sister project making all software agent-native
 
@@ -809,14 +809,14 @@ We welcome contributions! OpenHarness is designed to be extensible:
 
 ## ⭐ Star History
 
-If you find OpenHarness helpful, please consider giving us a star! ⭐
+If you find ClawTeam helpful, please consider giving us a star! ⭐
 
 <div align="center">
-  <a href="https://star-history.com/#HKUDS/OpenHarness&Date">
+  <a href="https://star-history.com/#HKUDS/ClawTeam&Date">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=HKUDS/OpenHarness&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=HKUDS/OpenHarness&type=Date" />
-      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=HKUDS/OpenHarness&type=Date" />
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=HKUDS/ClawTeam&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=HKUDS/ClawTeam&type=Date" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=HKUDS/ClawTeam&type=Date" />
     </picture>
   </a>
 </div>
@@ -829,17 +829,17 @@ MIT License — free to use, modify, and distribute.
 
 <div align="center">
 
-**OpenHarness** — *Agent Swarm Intelligence.* 🦞
+**ClawTeam** — *Agent Swarm Intelligence.* 🦞
 
 <sub>8 agents × 8 H100s × 2430 experiments × one CLI × one swarm</sub>
 
 <br>
 
-<img src="assets/icon.png" alt="OpenHarness" width="80">
+<img src="assets/icon.png" alt="ClawTeam" width="80">
 
 </div>
 
 <p align="center">
-  <em>Thanks for visiting ✨ OpenHarness!</em><br><br>
-  <img src="https://visitor-badge.laobi.icu/badge?page_id=HKUDS.OpenHarness&style=for-the-badge&color=00d4ff" alt="Views">
+  <em>Thanks for visiting ✨ ClawTeam!</em><br><br>
+  <img src="https://visitor-badge.laobi.icu/badge?page_id=HKUDS.ClawTeam&style=for-the-badge&color=00d4ff" alt="Views">
 </p>

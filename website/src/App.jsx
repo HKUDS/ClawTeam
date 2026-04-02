@@ -48,15 +48,15 @@ const features = [
   { title: "Git-aware execution", body: "Real repos, worktrees, diffs, and mergeable state keep the swarm grounded." }
 ];
 const steps = [
-  { num: "01", title: "Install", body: "Get the CLI. Add P2P transport when the team needs it.", code: 'pip install openharness\npip install "openharness[p2p]"' },
-  { num: "02", title: "Model the work", body: "Create a team and define tasks so the board tracks the project.", code: 'openharness team spawn-team my-team -d "Docs + engineering"\nopenharness task create my-team "Build landing page" --priority urgent' },
-  { num: "03", title: "Spawn agents", body: "Run any terminal-native client from the same surface.", code: "openharness spawn tmux claude-code --team my-team --agent-name builder\nopenharness spawn tmux codex --team my-team --agent-name reviewer" }
+  { num: "01", title: "Install", body: "Get the CLI. Add P2P transport when the team needs it.", code: 'pip install clawteam\npip install "clawteam[p2p]"' },
+  { num: "02", title: "Model the work", body: "Create a team and define tasks so the board tracks the project.", code: 'clawteam team spawn-team my-team -d "Docs + engineering"\nclawteam task create my-team "Build landing page" --priority urgent' },
+  { num: "03", title: "Spawn agents", body: "Run any terminal-native client from the same surface.", code: "clawteam spawn tmux claude-code --team my-team --agent-name builder\nclawteam spawn tmux codex --team my-team --agent-name reviewer" }
 ];
 const docs = [
-  { title: "Quick Start", body: "Install to first running swarm.", href: "https://github.com/HKUDS/OpenHarness#-quick-start" },
-  { title: "Skill Guide", body: "Agent-facing operating guide.", href: "skills/openharness/SKILL.md" },
-  { title: "CLI Reference", body: "Commands, flags, and runtime details.", href: "skills/openharness/references/cli-reference.md" },
-  { title: "Workflows", body: "Practical patterns for real teams.", href: "skills/openharness/references/workflows.md" }
+  { title: "Quick Start", body: "Install to first running swarm.", href: "https://github.com/HKUDS/ClawTeam#-quick-start" },
+  { title: "Skill Guide", body: "Agent-facing operating guide.", href: "skills/clawteam/SKILL.md" },
+  { title: "CLI Reference", body: "Commands, flags, and runtime details.", href: "skills/clawteam/references/cli-reference.md" },
+  { title: "Workflows", body: "Practical patterns for real teams.", href: "skills/clawteam/references/workflows.md" }
 ];
 
 function HalfGlobe() {
@@ -171,13 +171,13 @@ function HalfGlobe() {
 function TerminalMockup() {
   return (
     <div className="terminal">
-      <div className="terminal-bar"><span className="terminal-dot"/><span className="terminal-dot"/><span className="terminal-dot"/><span className="terminal-title">openharness</span></div>
+      <div className="terminal-bar"><span className="terminal-dot"/><span className="terminal-dot"/><span className="terminal-dot"/><span className="terminal-title">clawteam</span></div>
       <div className="terminal-body">
-        <div className="terminal-line"><span className="t-prompt">$</span> openharness team spawn-team docs-sprint</div>
+        <div className="terminal-line"><span className="t-prompt">$</span> clawteam team spawn-team docs-sprint</div>
         <div className="terminal-line t-output"><span className="t-success">{"\u2713"}</span> Team &quot;docs-sprint&quot; created</div><br/>
-        <div className="terminal-line"><span className="t-prompt">$</span> openharness spawn tmux claude-code --agent-name builder</div>
+        <div className="terminal-line"><span className="t-prompt">$</span> clawteam spawn tmux claude-code --agent-name builder</div>
         <div className="terminal-line t-output"><span className="t-active">{"\u25cf"}</span> Agent &quot;builder&quot; spawned in tmux</div><br/>
-        <div className="terminal-line"><span className="t-prompt">$</span> openharness team status docs-sprint</div>
+        <div className="terminal-line"><span className="t-prompt">$</span> clawteam team status docs-sprint</div>
         <div className="terminal-output-block">
           <div className="t-status-header">docs-sprint <span className="t-dim">3 agents active</span></div>
           <div className="t-status-row"><span className="t-success">{"\u25cf"}</span> T-001 Build landing page <span className="t-badge t-done">done</span></div>
@@ -196,9 +196,9 @@ function App() {
       <div className="bg-gradient" aria-hidden="true"/>
       <header className="header">
         <div className="shell header-inner">
-          <a className="logo" href="#top"><img src={logo} alt="OpenHarness"/><strong>OpenHarness</strong></a>
+          <a className="logo" href="#top"><img src={logo} alt="ClawTeam"/><strong>ClawTeam</strong></a>
           <nav className="nav"><a href="#features">Features</a><a href="#workflow">How it works</a><a href="#docs">Docs</a></nav>
-          <a className="btn-primary" href="https://github.com/HKUDS/OpenHarness" target="_blank" rel="noreferrer">GitHub</a>
+          <a className="btn-primary" href="https://github.com/HKUDS/ClawTeam" target="_blank" rel="noreferrer">GitHub</a>
         </div>
       </header>
       <main>
@@ -206,10 +206,10 @@ function App() {
           <div className="hero-content">
             <p className="badge">Agent swarm orchestration</p>
             <h1>Coordinate any coding agent from one CLI</h1>
-            <p className="hero-sub">OpenHarness is the coordination layer for Claude Code, Codex, OpenClaw, nanobot, and any terminal-native client that needs to plan, delegate, and ship together.</p>
+            <p className="hero-sub">ClawTeam is the coordination layer for Claude Code, Codex, OpenClaw, nanobot, and any terminal-native client that needs to plan, delegate, and ship together.</p>
             <div className="hero-cta">
-              <a className="btn-primary" href="https://github.com/HKUDS/OpenHarness#-quick-start" target="_blank" rel="noreferrer">Get started</a>
-              <a className="btn-ghost" href="skills/openharness/references/cli-reference.md">CLI Reference</a>
+              <a className="btn-primary" href="https://github.com/HKUDS/ClawTeam#-quick-start" target="_blank" rel="noreferrer">Get started</a>
+              <a className="btn-ghost" href="skills/clawteam/references/cli-reference.md">CLI Reference</a>
             </div>
           </div>
           <div className="hero-visual"><TerminalMockup/></div>
@@ -235,8 +235,8 @@ function App() {
         </section>
       </main>
       <footer className="footer shell">
-        <span>OpenHarness</span>
-        <div className="footer-links"><a href="https://github.com/HKUDS/OpenHarness">GitHub</a><a href="skills/openharness/SKILL.md">Skill</a><a href="skills/openharness/references/cli-reference.md">CLI Reference</a></div>
+        <span>ClawTeam</span>
+        <div className="footer-links"><a href="https://github.com/HKUDS/ClawTeam">GitHub</a><a href="skills/clawteam/SKILL.md">Skill</a><a href="skills/clawteam/references/cli-reference.md">CLI Reference</a></div>
       </footer>
     </div>
   );

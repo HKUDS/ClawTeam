@@ -15,7 +15,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install ruff
-      - run: ruff check openharness/ tests/
+      - run: ruff check clawteam/ tests/
 
   test:
     runs-on: ${{ matrix.os }}

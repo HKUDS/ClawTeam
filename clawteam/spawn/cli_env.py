@@ -12,7 +12,7 @@ def _looks_like_clawteam_entrypoint(value: str) -> bool:
     """Return True when argv0 plausibly points at the clawteam CLI."""
 
     name = Path(value).name.lower()
-    return name == "clawteam" or name == "openharness" or name.startswith("clawteam.")
+    return name == "clawteam" or name.startswith("clawteam.")
 
 
 def resolve_clawteam_executable() -> str:
