@@ -86,6 +86,8 @@ def build_agent_prompt(
     lines.extend([
         "",
         "## Coordination Protocol\n",
+        "- Your task is provided in the ## Task section above. Start working on it immediately.",
+        "- DO NOT check inbox, team info, or task list as your first action — your task is already assigned.",
         f"- Use `clawteam task list {team_name} --owner {agent_name}` to see your tasks.",
         f"- Starting a task: `clawteam task update {team_name} <task-id> --status in_progress`",
         "- Before marking a task completed, commit your changes in this repository with git.",
