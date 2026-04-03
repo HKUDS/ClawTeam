@@ -402,6 +402,10 @@ clawteam spawn subprocess <your-agent> --team my-team --agent-name test --task "
 | [Codex](https://openai.com/codex) | `clawteam spawn tmux codex --team ...` | ✅ 完全支持 |
 | [OpenClaw](https://github.com/nicepkg/OpenClaw) | `clawteam spawn tmux openclaw --team ...` | ✅ 完全支持 |
 | [nanobot](https://github.com/HKUDS/nanobot) | `clawteam spawn tmux nanobot --team ...` | ✅ 完全支持 |
+| [Qwen Code](https://github.com/QwenLM/qwen-code) | `clawteam spawn tmux qwen-code --team ...` | 🔮 实验性 |
+| [pi](https://github.com/mariozechner/pi-coding-agent) | `clawteam spawn tmux pi --team ...` | 🔮 实验性 |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | `clawteam spawn tmux gemini --team ...` | 🔮 实验性 |
+| [OpenCode](https://github.com/opencode-ai/opencode) | `clawteam spawn tmux opencode --team ...` | 🔮 实验性 |
 | [Cursor](https://cursor.com) | `clawteam spawn subprocess cursor --team ...` | 🔮 实验性 |
 | 自定义脚本 | `clawteam spawn subprocess python --team ...` | ✅ 完全支持 |
 

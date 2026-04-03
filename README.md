@@ -461,6 +461,10 @@ All examples below assume the corresponding CLI already runs standalone on your 
 | [Codex](https://openai.com/codex) | `clawteam spawn tmux codex --team ...` | ✅ Full support |
 | [OpenClaw](https://github.com/nicepkg/OpenClaw) | `clawteam spawn tmux openclaw --team ...` | ✅ Full support |
 | [nanobot](https://github.com/HKUDS/nanobot) | `clawteam spawn tmux nanobot --team ...` | ✅ Full support |
+| [Qwen Code](https://github.com/QwenLM/qwen-code) | `clawteam spawn tmux qwen-code --team ...` | 🔮 Experimental |
+| [pi](https://github.com/mariozechner/pi-coding-agent) | `clawteam spawn tmux pi --team ...` | 🔮 Experimental |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | `clawteam spawn tmux gemini --team ...` | 🔮 Experimental |
+| [OpenCode](https://github.com/opencode-ai/opencode) | `clawteam spawn tmux opencode --team ...` | 🔮 Experimental |
 | [Cursor](https://cursor.com) | `clawteam spawn subprocess cursor --team ...` | 🔮 Experimental |
 | Custom scripts | `clawteam spawn subprocess python --team ...` | ✅ Full support |
 
