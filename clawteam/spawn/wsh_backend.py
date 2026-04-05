@@ -224,6 +224,7 @@ class WshBackend(SpawnBackend):
         cwd: str | None = None,
         skip_permissions: bool = False,
         system_prompt: str | None = None,
+        is_leader: bool = False,
     ) -> str:
         """Spawn a new agent in a TideTerm block."""
         wsh_bin = _find_wsh()
@@ -243,7 +244,7 @@ class WshBackend(SpawnBackend):
                 "CLAWTEAM_AGENT_NAME": agent_name,
                 "CLAWTEAM_AGENT_TYPE": agent_type,
                 "CLAWTEAM_TEAM_NAME": team_name,
-                "CLAWTEAM_AGENT_LEADER": "0",
+                "CLAWTEAM_AGENT_LEADER": "1" if is_leader else "0",
             }
         )
         if cwd:

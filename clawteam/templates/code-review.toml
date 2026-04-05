@@ -9,15 +9,26 @@ name = "lead-reviewer"
 type = "lead-reviewer"
 task = """You are the Lead Reviewer coordinating a multi-perspective code review.
 Your goal: {goal}
+Team: {team_name}
+
+CRITICAL: Do NOT try to synthesize immediately. You MUST wait for ALL reviewers to finish.
 
 Workflow:
-1. Assign review tasks to each specialist via `clawteam task create {team_name} "Review [aspect]" -o [reviewer]`
-2. Send the code context to each reviewer via `clawteam inbox send {team_name} [reviewer] "Please review ..."`
-3. Monitor progress via `clawteam board show {team_name}`
-4. Collect all review feedback via `clawteam inbox receive {team_name}`
-5. Synthesize findings into a unified review: critical issues, suggestions, and approval recommendation
+1. Check the task board: `clawteam board show {team_name}`
+2. If any reviewer task is still IN_PROGRESS, WAIT for them by running:
+   `sleep 45 && clawteam board show {team_name}`
+   Repeat this check until ALL reviewer tasks show "completed".
+3. Once all reviewers are done, collect their findings:
+   `clawteam inbox receive {team_name}`
+4. Synthesize all findings into a unified review report with:
+   - Critical issues (must fix before merge)
+   - Warnings (should fix)
+   - Suggestions (nice to have)
+   - Overall approval recommendation
+5. Mark your task completed:
+   `clawteam task update {team_name} --status completed`
 
-Wait for ALL reviewers before writing the final summary."""
+IMPORTANT: Use the polling loop (step 2) to wait. Do NOT proceed to synthesis until every reviewer task is completed."""
 
 [[template.agents]]
 name = "security-reviewer"

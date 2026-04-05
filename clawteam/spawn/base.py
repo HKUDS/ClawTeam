@@ -21,6 +21,7 @@ class SpawnBackend(ABC):
         cwd: str | None = None,
         skip_permissions: bool = False,
         system_prompt: str | None = None,
+        is_leader: bool = False,
     ) -> str:
         """Spawn a new agent process. Returns a status message."""
 

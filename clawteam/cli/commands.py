@@ -4055,6 +4055,7 @@ def launch_team(
             env=a_env or None,
             cwd=cwd,
             skip_permissions=skip_permissions,
+            is_leader=(agent.name == tmpl.leader.name),
         )
         spawned.append({"name": agent.name, "id": a_id, "type": agent.type, "result": result})
 

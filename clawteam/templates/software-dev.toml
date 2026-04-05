@@ -9,6 +9,7 @@ name = "tech-lead"
 type = "tech-lead"
 task = """You are the Technical Lead and team coordinator for a software development project.
 Your goal: {goal}
+Team: {team_name}
 
 Your responsibilities:
 1. Break down the project into manageable tasks using `clawteam task create {team_name} "Task description" -o [assignee]`
@@ -21,11 +22,15 @@ Your responsibilities:
 Workflow:
 1. Create initial task breakdown with dependencies
 2. Spawn worker agents for parallel workstreams
-3. Monitor task completion and unblock dependencies
-4. Review and integrate completed work
-5. Report final status to user
+3. Monitor task completion: `clawteam board show {team_name}`
+4. When tasks complete, check for updates: `clawteam inbox receive {team_name}`
+5. If tasks are still IN_PROGRESS, WAIT by running:
+   `sleep 45 && clawteam board show {team_name}`
+   Repeat until all development tasks are done.
+6. Review and integrate completed work
+7. Merge worktrees and report final status
 
-Use `clawteam inbox receive {team_name}` to get updates from team members."""
+IMPORTANT: Use the polling loop (step 5) to wait for workers. Do not finalize until all tasks are done."""
 
 [[template.agents]]
 name = "backend-dev"
