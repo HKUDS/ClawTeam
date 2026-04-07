@@ -35,10 +35,21 @@ class AgentIdentity:
 
     @classmethod
     def from_env(cls) -> AgentIdentity:
-        """Build identity from CLAWTEAM_* environment variables (OH_* legacy fallback)."""
+        """Build identity from environment variables with legacy fallbacks.
+
+        Field precedence:
+        - agent_id, agent_name, agent_type, team_name, and is_leader:
+          CLAWTEAM_* first, then CLAUDE_CODE_*.
+        - plan_mode_required:
+          CLAWTEAM_PLAN_MODE_REQUIRED first, then OH_PLAN_MODE_REQUIRED,
+          then CLAUDE_CODE_PLAN_MODE_REQUIRED.
+        - user:
+          CLAWTEAM_USER first, otherwise load_config().user.
+        """
         user = os.environ.get("CLAWTEAM_USER", "")
         if not user:
             from clawteam.config import load_config
+
             user = load_config().user
         return cls(
             agent_id=_env("CLAWTEAM_AGENT_ID", "CLAUDE_CODE_AGENT_ID", uuid.uuid4().hex[:12]),
@@ -47,9 +58,12 @@ class AgentIdentity:
             agent_type=_env("CLAWTEAM_AGENT_TYPE", "CLAUDE_CODE_AGENT_TYPE", "general-purpose"),
             team_name=_env("CLAWTEAM_TEAM_NAME", "CLAUDE_CODE_TEAM_NAME") or None,
             is_leader=_env_bool("CLAWTEAM_AGENT_LEADER", "CLAUDE_CODE_AGENT_LEADER"),
-            plan_mode_required=_env_bool(
-                "CLAWTEAM_PLAN_MODE_REQUIRED", "OH_PLAN_MODE_REQUIRED"
-            ),
+            plan_mode_required=(
+                os.environ.get("CLAWTEAM_PLAN_MODE_REQUIRED")
+                or os.environ.get("OH_PLAN_MODE_REQUIRED")
+                or os.environ.get("CLAUDE_CODE_PLAN_MODE_REQUIRED")
+                or ""
+            ).lower() in ("1", "true", "yes"),
         )
 
     def to_env(self) -> dict[str, str]:
