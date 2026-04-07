@@ -327,7 +327,7 @@ class WshBackend(SpawnBackend):
             return (
                 f"Error: wsh block for '{normalized_command[0]}' did not become visible "
                 f"within {cfg.spawn_ready_timeout:.1f}s. Verify CLI works standalone before "
-                "using it with oh spawn."
+                "using it with clawteam spawn."
             )
 
         subprocess.run(

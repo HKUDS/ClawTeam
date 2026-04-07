@@ -99,7 +99,7 @@ class HumanApprovalGate(PhaseGate):
 
     def check(self, state: PhaseState) -> tuple[bool, str]:
         if self._artifact_name not in state.artifacts:
-            return False, f"Human approval required: oh harness approve {state.team_name}"
+            return False, f"Human approval required: clawteam harness approve {state.team_name}"
         return True, ""
 
 

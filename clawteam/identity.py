@@ -7,13 +7,13 @@ import uuid
 from dataclasses import dataclass, field
 
 
-def _env(oh_key: str, claude_code_key: str, default: str = "") -> str:
-    """Read from OH_* first, fall back to CLAUDE_CODE_*."""
-    return os.environ.get(oh_key) or os.environ.get(claude_code_key) or default
+def _env(primary_key: str, fallback_key: str, default: str = "") -> str:
+    """Read from primary env var first, fall back to secondary."""
+    return os.environ.get(primary_key) or os.environ.get(fallback_key) or default
 
 
-def _env_bool(oh_key: str, claude_code_key: str) -> bool:
-    val = _env(oh_key, claude_code_key)
+def _env_bool(primary_key: str, fallback_key: str) -> bool:
+    val = _env(primary_key, fallback_key)
     return val.lower() in ("1", "true", "yes")
 
 
@@ -35,7 +35,7 @@ class AgentIdentity:
 
     @classmethod
     def from_env(cls) -> AgentIdentity:
-        """Build identity from OH_* or CLAUDE_CODE_* environment variables."""
+        """Build identity from CLAWTEAM_* environment variables (OH_* legacy fallback)."""
         user = os.environ.get("CLAWTEAM_USER", "")
         if not user:
             from clawteam.config import load_config
@@ -48,7 +48,7 @@ class AgentIdentity:
             team_name=_env("CLAWTEAM_TEAM_NAME", "CLAUDE_CODE_TEAM_NAME") or None,
             is_leader=_env_bool("CLAWTEAM_AGENT_LEADER", "CLAUDE_CODE_AGENT_LEADER"),
             plan_mode_required=_env_bool(
-                "OH_PLAN_MODE_REQUIRED", "CLAUDE_CODE_PLAN_MODE_REQUIRED"
+                "CLAWTEAM_PLAN_MODE_REQUIRED", "OH_PLAN_MODE_REQUIRED"
             ),
         )
 
@@ -59,6 +59,8 @@ class AgentIdentity:
             "CLAWTEAM_AGENT_NAME": self.agent_name,
             "CLAWTEAM_AGENT_TYPE": self.agent_type,
             "CLAWTEAM_AGENT_LEADER": "1" if self.is_leader else "0",
+            "CLAWTEAM_PLAN_MODE_REQUIRED": "1" if self.plan_mode_required else "0",
+            # Legacy alias for backward compatibility
             "OH_PLAN_MODE_REQUIRED": "1" if self.plan_mode_required else "0",
         }
         if self.user:

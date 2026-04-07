@@ -1,6 +1,6 @@
 """Agent prompt builder — identity + task + context awareness.
 
-Coordination knowledge (how to use oh CLI) is provided
+Coordination knowledge (how to use the clawteam CLI) is provided
 by the ClawTeam Skill, not duplicated here.
 """
 

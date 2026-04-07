@@ -81,11 +81,10 @@ def _make_shell_handler(command: str):
         env = os.environ.copy()
         env["CLAWTEAM_EVENT_TYPE"] = type(event).__name__
         for key, value in asdict(event).items():
-            env_key = f"OH_{key.upper()}"
-            if isinstance(value, list):
-                env[env_key] = ",".join(str(v) for v in value)
-            else:
-                env[env_key] = str(value) if value is not None else ""
+            formatted = ",".join(str(v) for v in value) if isinstance(value, list) else (str(value) if value is not None else "")
+            env[f"CLAWTEAM_{key.upper()}"] = formatted
+            # Legacy alias for backward compatibility
+            env[f"OH_{key.upper()}"] = formatted
         try:
             result = subprocess.run(
                 command,

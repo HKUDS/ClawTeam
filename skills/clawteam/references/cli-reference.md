@@ -7,7 +7,7 @@ clawteam [--version] [--json] [--data-dir PATH] <command>
 ```
 
 - `--json` — Output JSON instead of human-readable text. Apply before subcommand: `clawteam --json team discover`
-- `--data-dir PATH` — Override data directory (default: `~/.oh`)
+- `--data-dir PATH` — Override data directory (default: `~/.clawteam`)
 
 ## Environment Variables
 
@@ -19,7 +19,7 @@ ClawTeam agents use these environment variables for identity:
 | `CLAWTEAM_AGENT_NAME` | Human-readable agent name | `alice` |
 | `CLAWTEAM_AGENT_TYPE` | Agent role type | `leader`, `general-purpose`, `researcher` |
 | `CLAWTEAM_TEAM_NAME` | Team the agent belongs to | `dev-team` |
-| `CLAWTEAM_DATA_DIR` | Override data directory | `/tmp/oh-data` |
+| `CLAWTEAM_DATA_DIR` | Override data directory | `/tmp/clawteam-data` |
 
 When spawning agents via `clawteam spawn`, these are set automatically.
 
@@ -389,7 +389,7 @@ eval $(clawteam identity set --agent-name alice --team dev-team)
 ### File Storage Layout
 
 ```
-~/.oh/
+~/.clawteam/
 ├── teams/{team}/
 │   ├── config.json          # TeamConfig (name, members, leader)
 │   └── inboxes/{agent}/     # msg-{timestamp}-{uuid}.json files
