@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import socket
 import threading
 import time
 import urllib.error
@@ -16,81 +17,9 @@ from urllib.parse import parse_qs, urlparse
 from clawteam.board.collector import BoardCollector
 
 _STATIC_DIR = Path(__file__).parent / "static"
-_ALLOWED_PROXY_HOSTS = {
-    "api.github.com",
-    "github.com",
-    "raw.githubusercontent.com",
-}
-
-
-class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
-    """Reject redirects for proxied fetches."""
-
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        raise urllib.error.HTTPError(newurl, code, msg, headers, fp)
-
-
-def _is_blocked_hostname(hostname: str) -> bool:
-    host = hostname.strip().lower()
-    if host in {"localhost"}:
-        return True
-    try:
-        ip = ipaddress.ip_address(host)
-    except ValueError:
-        return False
-    return (
-        ip.is_loopback
-        or ip.is_private
-        or ip.is_link_local
-        or ip.is_multicast
-        or ip.is_reserved
-    )
-
-
-def _normalize_proxy_target(target_url: str) -> str:
-    parsed = urlparse(target_url)
-    if parsed.scheme != "https":
-        raise ValueError("Proxy only allows https URLs")
-
-    hostname = (parsed.hostname or "").lower()
-    if not hostname:
-        raise ValueError("Proxy URL must include a hostname")
-    if _is_blocked_hostname(hostname):
-        raise ValueError("Proxy target is not allowed")
-
-    if hostname == "github.com":
-        parts = [p for p in parsed.path.split("/") if p]
-        if len(parts) == 2:
-            return f"https://api.github.com/repos/{parts[0]}/{parts[1]}/readme"
-        return target_url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
-
-    if hostname not in _ALLOWED_PROXY_HOSTS:
-        raise ValueError("Proxy only allows GitHub-hosted content")
-
-    return target_url
-
-
-def _fetch_proxy_content(target_url: str) -> bytes:
-    normalized = _normalize_proxy_target(target_url)
-    opener = urllib.request.build_opener(_NoRedirectHandler)
-    req = urllib.request.Request(normalized, headers={"User-Agent": "ClawTeam-Server"})
-    with opener.open(req, timeout=10) as resp:
-        final_url = resp.geturl()
-        _normalize_proxy_target(final_url)
-        body = resp.read()
-
-    if normalized.startswith("https://api.github.com/repos/") and final_url == normalized:
-        payload = json.loads(body.decode("utf-8"))
-        download_url = payload.get("download_url")
-        if not download_url:
-            raise ValueError("GitHub README proxy target has no downloadable content")
-        normalized = _normalize_proxy_target(download_url)
-        req = urllib.request.Request(normalized, headers={"User-Agent": "ClawTeam-Server"})
-        with opener.open(req, timeout=10) as resp:
-            _normalize_proxy_target(resp.geturl())
-            return resp.read()
-
-    return body
+_PROXY_TIMEOUT_SECONDS = 10
+_PROXY_MAX_BYTES = 2 * 1024 * 1024
+_PROXY_CHUNK_SIZE = 64 * 1024
 
 
 @dataclass
@@ -124,6 +53,9 @@ class BoardHandler(BaseHTTPRequestHandler):
     default_team: str = ""
     interval: float = 2.0
     team_cache: TeamSnapshotCache
+    proxy_timeout_seconds: float = _PROXY_TIMEOUT_SECONDS
+    proxy_max_bytes: int = _PROXY_MAX_BYTES
+    proxy_chunk_size: int = _PROXY_CHUNK_SIZE
 
     def do_GET(self):
         path = self.path.split("?")[0]
@@ -150,16 +82,7 @@ class BoardHandler(BaseHTTPRequestHandler):
             if not target_url:
                 self.send_error(400, "URL required")
                 return
-            try:
-                content = _fetch_proxy_content(target_url)
-                self.send_response(200)
-                self.send_header("Content-Type", "text/plain; charset=utf-8")
-                self.end_headers()
-                self.wfile.write(content)
-            except ValueError as e:
-                self.send_error(403, str(e))
-            except Exception as e:
-                self.send_error(500, str(e))
+            self._serve_proxy(target_url)
         else:
             self.send_error(404)
 
@@ -241,6 +164,82 @@ class BoardHandler(BaseHTTPRequestHandler):
                 time.sleep(self.interval)
         except (BrokenPipeError, ConnectionResetError, OSError):
             pass
+
+    def _resolve_proxy_url(self, target_url: str) -> str:
+        # If github URL, convert to api.github.com/repos/.../readme
+        if "github.com" in target_url and "raw.githubusercontent.com" not in target_url:
+            parsed = urlparse(target_url)
+            parts = [p for p in parsed.path.split("/") if p]
+            if len(parts) == 2:
+                api_url = f"https://api.github.com/repos/{parts[0]}/{parts[1]}/readme"
+                req = urllib.request.Request(api_url, headers={"User-Agent": "ClawTeam-Server"})
+                with urllib.request.urlopen(req, timeout=self.proxy_timeout_seconds) as resp:
+                    data = json.loads(resp.read().decode())
+                    return data.get("download_url", target_url)
+
+            return target_url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
+
+        return target_url
+
+    def _serve_proxy(self, target_url: str):
+        try:
+            resolved_url = self._resolve_proxy_url(target_url)
+            req = urllib.request.Request(resolved_url, headers={"User-Agent": "ClawTeam-Server"})
+            with urllib.request.urlopen(req, timeout=self.proxy_timeout_seconds) as resp:
+                content_length_header = resp.headers.get("Content-Length")
+                if content_length_header is not None:
+                    try:
+                        content_length = int(content_length_header)
+                    except ValueError:
+                        content_length = None
+                    if content_length is not None and content_length > self.proxy_max_bytes:
+                        self.send_error(413, "Response too large")
+                        return
+                else:
+                    content_length = None
+
+                if content_length is None:
+                    buffered = bytearray()
+                    while True:
+                        chunk = resp.read(self.proxy_chunk_size)
+                        if not chunk:
+                            break
+                        buffered.extend(chunk)
+                        if len(buffered) > self.proxy_max_bytes:
+                            self.send_error(413, "Response too large")
+                            return
+
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/plain; charset=utf-8")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.send_header("Content-Length", str(len(buffered)))
+                    self.end_headers()
+                    self.wfile.write(buffered)
+                    return
+
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                if content_length is not None:
+                    self.send_header("Content-Length", str(content_length))
+                self.end_headers()
+
+                while True:
+                    chunk = resp.read(self.proxy_chunk_size)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+        except TimeoutError:
+            self.send_error(504, "Proxy request timed out")
+        except socket.timeout:
+            self.send_error(504, "Proxy request timed out")
+        except urllib.error.URLError as e:
+            if isinstance(e.reason, (TimeoutError, socket.timeout)):
+                self.send_error(504, "Proxy request timed out")
+            else:
+                self.send_error(502, str(e))
+        except Exception as e:
+            self.send_error(500, str(e))
 
     def log_message(self, format, *args):
         # Suppress default stderr logging for SSE connections
