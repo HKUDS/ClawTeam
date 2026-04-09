@@ -31,6 +31,7 @@ class SubprocessBackend(SpawnBackend):
         cwd: str | None = None,
         skip_permissions: bool = False,
         system_prompt: str | None = None,
+        is_leader: bool = False,
     ) -> str:
         spawn_env = os.environ.copy()
         clawteam_bin = resolve_clawteam_executable()
@@ -41,7 +42,7 @@ class SubprocessBackend(SpawnBackend):
             "CLAWTEAM_AGENT_NAME": agent_name,
             "CLAWTEAM_AGENT_TYPE": agent_type,
             "CLAWTEAM_TEAM_NAME": team_name,
-            "CLAWTEAM_AGENT_LEADER": "0",
+            "CLAWTEAM_AGENT_LEADER": "1" if is_leader else "0",
         })
         # Propagate user if set
         user = os.environ.get("CLAWTEAM_USER", "")

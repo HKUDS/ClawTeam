@@ -52,6 +52,7 @@ class TmuxBackend(SpawnBackend):
         cwd: str | None = None,
         skip_permissions: bool = False,
         system_prompt: str | None = None,
+        is_leader: bool = False,
     ) -> str:
         if not shutil.which("tmux"):
             return "Error: tmux not installed"
@@ -69,7 +70,7 @@ class TmuxBackend(SpawnBackend):
             "CLAWTEAM_AGENT_NAME": agent_name,
             "CLAWTEAM_AGENT_TYPE": agent_type,
             "CLAWTEAM_TEAM_NAME": team_name,
-            "CLAWTEAM_AGENT_LEADER": "0",
+            "CLAWTEAM_AGENT_LEADER": "1" if is_leader else "0",
         })
         if cwd:
             env_vars["CLAWTEAM_WORKSPACE_DIR"] = cwd
@@ -143,6 +144,14 @@ class TmuxBackend(SpawnBackend):
         if launch.returncode != 0:
             stderr = launch.stderr.decode() if isinstance(launch.stderr, bytes) else launch.stderr
             return f"Error: failed to launch tmux session: {(stderr or '').strip()}"
+
+        # Keep leader pane alive even if the agent process exits, so it can be
+        # re-activated or inspected later.
+        if is_leader:
+            subprocess.run(
+                ["tmux", "set-option", "-t", target, "remain-on-exit", "on"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
 
         # Set tmux native hooks for reliable lifecycle management
         _exit_hook_cmd = (
