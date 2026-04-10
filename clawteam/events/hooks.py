@@ -108,7 +108,7 @@ def _format_env_value(value: Any) -> str:
     if isinstance(value, list):
         return ",".join(str(item) for item in value)
     if isinstance(value, dict):
-        return json.dumps(value, sort_keys=True)
+        return json.dumps(value, sort_keys=True, default=str)
     return str(value)
 
 
