@@ -7,14 +7,20 @@ import uuid
 from dataclasses import dataclass, field
 
 
+def _is_truthy(value: str) -> bool:
+    return value.lower() in ("1", "true", "yes")
+
+
 def _env(primary_key: str, fallback_key: str, default: str = "") -> str:
     """Read from primary env var first, fall back to secondary."""
     return os.environ.get(primary_key) or os.environ.get(fallback_key) or default
 
 
-def _env_bool(primary_key: str, fallback_key: str) -> bool:
-    val = _env(primary_key, fallback_key)
-    return val.lower() in ("1", "true", "yes")
+def _env_bool(*keys: str) -> bool:
+    for key in keys:
+        if key in os.environ:
+            return _is_truthy(os.environ.get(key, ""))
+    return False
 
 
 @dataclass
@@ -58,12 +64,11 @@ class AgentIdentity:
             agent_type=_env("CLAWTEAM_AGENT_TYPE", "CLAUDE_CODE_AGENT_TYPE", "general-purpose"),
             team_name=_env("CLAWTEAM_TEAM_NAME", "CLAUDE_CODE_TEAM_NAME") or None,
             is_leader=_env_bool("CLAWTEAM_AGENT_LEADER", "CLAUDE_CODE_AGENT_LEADER"),
-            plan_mode_required=(
-                os.environ.get("CLAWTEAM_PLAN_MODE_REQUIRED")
-                or os.environ.get("OH_PLAN_MODE_REQUIRED")
-                or os.environ.get("CLAUDE_CODE_PLAN_MODE_REQUIRED")
-                or ""
-            ).lower() in ("1", "true", "yes"),
+            plan_mode_required=_env_bool(
+                "CLAWTEAM_PLAN_MODE_REQUIRED",
+                "OH_PLAN_MODE_REQUIRED",
+                "CLAUDE_CODE_PLAN_MODE_REQUIRED",
+            ),
         )
 
     def to_env(self) -> dict[str, str]:

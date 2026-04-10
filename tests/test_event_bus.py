@@ -1,6 +1,7 @@
 """Tests for clawteam.events — EventBus, hooks, and global bus."""
 
 import time
+from subprocess import CompletedProcess
 
 from clawteam.events.bus import EventBus
 from clawteam.events.types import (
@@ -116,6 +117,30 @@ class TestHookManager:
         assert mgr.register_hook(hook) is True
         bus.emit(WorkerExit(team_name="test"))
         assert marker.exists()
+
+    def test_shell_hook_exports_clawteam_and_legacy_env_vars(self, monkeypatch):
+        from clawteam.events.hooks import HookDef, HookManager
+
+        bus = EventBus()
+        mgr = HookManager(bus)
+        captured = {}
+
+        def fake_run(command, shell, env, capture_output, timeout):
+            captured.update(env)
+            return CompletedProcess(args=command, returncode=0)
+
+        monkeypatch.setattr("clawteam.events.hooks.subprocess.run", fake_run)
+
+        hook = HookDef(event="WorkerExit", action="shell", command="echo ok")
+        assert mgr.register_hook(hook) is True
+
+        bus.emit(WorkerExit(team_name="test", agent_name="worker", abandoned_tasks=["t1", "t2"]))
+
+        assert captured["CLAWTEAM_EVENT_TYPE"] == "WorkerExit"
+        assert captured["CLAWTEAM_AGENT_NAME"] == "worker"
+        assert captured["OH_AGENT_NAME"] == "worker"
+        assert captured["CLAWTEAM_ABANDONED_TASKS"] == "t1,t2"
+        assert captured["OH_ABANDONED_TASKS"] == "t1,t2"
 
     def test_disabled_hook_not_loaded(self):
         from clawteam.events.hooks import HookDef, HookManager

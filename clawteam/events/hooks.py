@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import os
 import subprocess
 import sys
@@ -81,7 +82,7 @@ def _make_shell_handler(command: str):
         env = os.environ.copy()
         env["CLAWTEAM_EVENT_TYPE"] = type(event).__name__
         for key, value in asdict(event).items():
-            formatted = ",".join(str(v) for v in value) if isinstance(value, list) else (str(value) if value is not None else "")
+            formatted = _format_env_value(value)
             env[f"CLAWTEAM_{key.upper()}"] = formatted
             # Legacy alias for backward compatibility
             env[f"OH_{key.upper()}"] = formatted
@@ -99,6 +100,16 @@ def _make_shell_handler(command: str):
             return None
 
     return handler
+
+
+def _format_env_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, list):
+        return ",".join(str(item) for item in value)
+    if isinstance(value, dict):
+        return json.dumps(value, sort_keys=True)
+    return str(value)
 
 
 def _resolve_python_callable(dotted_path: str):
