@@ -188,11 +188,11 @@ You set the vision. The swarm executes with collective intelligence.
 <td width="33%">
 
 ### 🦞 Agents Spawn Agents
-The leader agent calls `oh spawn` to create workers. Each worker gets its own **git worktree**, **tmux window**, and **identity** — automatically.
+The leader agent calls `clawteam spawn` to create workers. Each worker gets its own **git worktree**, **tmux window**, and **identity** — automatically.
 
 ```bash
 # The leader agent runs:
-oh spawn --team my-team \
+clawteam spawn --team my-team \
   --agent-name worker1 \
   --task "Implement auth module"
 ```
@@ -205,9 +205,9 @@ Workers check their inbox, update task status, and report results — all throug
 
 ```bash
 # A worker agent checks tasks:
-oh task list my-team --owner me
+clawteam task list my-team --owner me
 # Then reports back:
-oh inbox send my-team leader \
+clawteam inbox send my-team leader \
   "Auth done. All tests passing."
 ```
 
@@ -219,9 +219,9 @@ Monitor the swarm from a tiled tmux view or a Web UI. The leader handles coordin
 
 ```bash
 # Watch all agents simultaneously
-oh board attach my-team
+clawteam board attach my-team
 # Or open the web dashboard
-oh board serve --port 8080
+clawteam board serve --port 8080
 ```
 
 </td>
@@ -272,16 +272,16 @@ Human prompt: "Use 8 GPUs to optimize train.py. Read program.md for instructions
 
 🦞 Leader agent's actions:
 ├── 📖 Read program.md, understand the experiment protocol
-├── 🏗️ oh team spawn-team autoresearch
+├── 🏗️ clawteam team spawn-team autoresearch
 ├── 🚀 Assigned each GPU a research direction:
-│   ├── GPU 0: oh spawn --task "Explore model depth (DEPTH 10-16)"
-│   ├── GPU 1: oh spawn --task "Explore model width (ASPECT_RATIO 80-128)"
-│   ├── GPU 2: oh spawn --task "Tune learning rates and optimizer"
-│   ├── GPU 3: oh spawn --task "Explore batch size and accumulation"
-│   ├── GPU 4-7: oh spawn tmux codex --task "..."  (Codex agents)
+│   ├── GPU 0: clawteam spawn --task "Explore model depth (DEPTH 10-16)"
+│   ├── GPU 1: clawteam spawn --task "Explore model width (ASPECT_RATIO 80-128)"
+│   ├── GPU 2: clawteam spawn --task "Tune learning rates and optimizer"
+│   ├── GPU 3: clawteam spawn --task "Explore batch size and accumulation"
+│   ├── GPU 4-7: clawteam spawn tmux codex --task "..."  (Codex agents)
 │   └── 🌳 Each agent: own git worktree, own branch, isolated experiments
 ├── 🔄 Every 30 minutes, checked results:
-│   ├── oh board show autoresearch
+│   ├── clawteam board show autoresearch
 │   ├── Read each agent's results.tsv
 │   ├── 🏆 Identified best findings (depth=12, batch=2^17, norm-before-RoPE)
 │   └── 📡 Cross-pollinated: told new agents to start from the best config
@@ -304,7 +304,7 @@ You tell Claude Code: *"Build me a full-stack todo app."* Claude realizes this i
 Human prompt: "Build a full-stack todo app with auth, database, and React frontend."
 
 🦞 Leader agent's actions:
-├── 🏗️ oh team spawn-team webapp -d "Full-stack todo app"
+├── 🏗️ clawteam team spawn-team webapp -d "Full-stack todo app"
 ├── 📋 Created tasks with dependency chains:
 │   ├── T1: "Design REST API schema"          → architect
 │   ├── T2: "Implement JWT auth" --blocked-by T1  → backend1
@@ -312,15 +312,15 @@ Human prompt: "Build a full-stack todo app with auth, database, and React fronte
 │   ├── T4: "Build React frontend"             → frontend
 │   └── T5: "Integration tests" --blocked-by T2,T3,T4 → tester
 ├── 🚀 Spawned 5 sub-agents (each in its own git worktree):
-│   ├── oh spawn --agent-name architect --task "Design the API schema"
-│   ├── oh spawn --agent-name backend1  --task "Implement JWT auth"
-│   ├── oh spawn --agent-name backend2  --task "Build PostgreSQL models"
-│   ├── oh spawn --agent-name frontend  --task "Build React UI"
-│   └── oh spawn --agent-name tester    --task "Write pytest tests"
+│   ├── clawteam spawn --agent-name architect --task "Design the API schema"
+│   ├── clawteam spawn --agent-name backend1  --task "Implement JWT auth"
+│   ├── clawteam spawn --agent-name backend2  --task "Build PostgreSQL models"
+│   ├── clawteam spawn --agent-name frontend  --task "Build React UI"
+│   └── clawteam spawn --agent-name tester    --task "Write pytest tests"
 ├── 🔗 Dependency auto-resolution:
 │   ├── architect completes → backend1 and backend2 auto-unblock
 │   ├── All backends complete → tester auto-unblocks
-│   └── Each agent calls: oh task update <id> --status completed
+│   └── Each agent calls: clawteam task update <id> --status completed
 ├── 💬 Sub-agents coordinate via inbox:
 │   ├── architect → backend1: "Here's the OpenAPI spec: ..."
 │   ├── backend1 → tester: "Auth endpoints ready at /api/auth/*"
@@ -336,7 +336,7 @@ A pre-built TOML template spawns a complete **7-agent** investment analysis team
 
 ```bash
 # One command launches everything:
-oh launch hedge-fund --team fund1 --goal "Analyze AAPL, MSFT, NVDA for Q2 2026"
+clawteam launch hedge-fund --team fund1 --goal "Analyze AAPL, MSFT, NVDA for Q2 2026"
 ```
 
 ```
@@ -349,9 +349,9 @@ oh launch hedge-fund --team fund1 --goal "Analyze AAPL, MSFT, NVDA for Q2 2026"
 │   ├── 📋 Fundamentals       → financial ratios (P/E, D/E, FCF)
 │   └── 📰 Sentiment Analyst  → news + insider trading signals
 ├── 🛡️ Risk Manager spawns, waits for all analyst signals:
-│   ├── oh inbox receive fund1 (collects all 5 signals)
+│   ├── clawteam inbox receive fund1 (collects all 5 signals)
 │   ├── Consolidates + computes position limits
-│   └── oh inbox send fund1 portfolio-manager "RISK REPORT: ..."
+│   └── clawteam inbox send fund1 portfolio-manager "RISK REPORT: ..."
 └── 💼 Portfolio Manager makes final buy/sell/hold decisions
 ```
 
@@ -394,7 +394,7 @@ Run these checks first:
 
 ```bash
 tmux -V
-oh --help
+clawteam --help
 
 # Replace claude with the agent you actually want to use:
 claude --version
@@ -402,7 +402,7 @@ codex --version
 nanobot --help
 ```
 
-If the agent CLI does not run correctly by itself, `oh spawn` will not fix it.
+If the agent CLI does not run correctly by itself, `clawteam spawn` will not fix it.
 
 ### ⚡ Option 1: Let the Agent Drive (Recommended)
 
@@ -413,7 +413,7 @@ ClawTeam ships with a reusable skill in `skills/clawteam/`.
 Install the skill into `~/.claude/skills/clawteam`, then prompt:
 
 ```
-"Build a web app. Use oh to split the work across multiple agents."
+"Build a web app. Use clawteam to split the work across multiple agents."
 ```
 
 **Codex**
@@ -421,29 +421,29 @@ Install the skill into `~/.claude/skills/clawteam`, then prompt:
 Install the same skill into `$CODEX_HOME/skills/clawteam` (typically `~/.codex/skills/clawteam`), then prompt:
 
 ```
-Use $oh to split this task across multiple agents and coordinate the team to completion.
+Use $clawteam to split this task across multiple agents and coordinate the team to completion.
 ```
 
-The agent will automatically create a team, spawn workers, assign tasks, and coordinate — using `oh` CLI commands under the hood.
+The agent will automatically create a team, spawn workers, assign tasks, and coordinate — using `clawteam` CLI commands under the hood.
 
 ### 🔧 Option 2: Drive It Manually
 
 ```bash
 # 1. Create a team (you become the leader)
-oh team spawn-team my-team -d "Build the auth module" -n leader
+clawteam team spawn-team my-team -d "Build the auth module" -n leader
 
 # 2. Spawn worker agents — each gets a git worktree, tmux window, and identity
-oh spawn --team my-team --agent-name alice --task "Implement the OAuth2 flow"
-oh spawn --team my-team --agent-name bob   --task "Write unit tests for auth"
+clawteam spawn --team my-team --agent-name alice --task "Implement the OAuth2 flow"
+clawteam spawn --team my-team --agent-name bob   --task "Write unit tests for auth"
 
 # 3. Workers auto-receive a coordination prompt that teaches them to:
-#    ✅ Check tasks:    oh task list my-team --owner alice
-#    ✅ Update status:  oh task update my-team <id> --status completed
-#    ✅ Message leader: oh inbox send my-team leader "Done!"
-#    ✅ Report idle:    oh lifecycle idle my-team
+#    ✅ Check tasks:    clawteam task list my-team --owner alice
+#    ✅ Update status:  clawteam task update my-team <id> --status completed
+#    ✅ Message leader: clawteam inbox send my-team leader "Done!"
+#    ✅ Report idle:    clawteam lifecycle idle my-team
 
 # 4. Watch them work side-by-side
-oh board attach my-team
+clawteam board attach my-team
 ```
 
 ### 🧩 Profiles and Presets
@@ -453,25 +453,25 @@ When you want to use a non-default provider, model, or API gateway, configure a
 
 ```bash
 # See built-in provider templates
-oh preset list
-oh preset show moonshot-cn
+clawteam preset list
+clawteam preset show moonshot-cn
 
 # Generate a reusable runtime profile from a preset
-oh preset generate-profile moonshot-cn claude --name claude-kimi
+clawteam preset generate-profile moonshot-cn claude --name claude-kimi
 
 # MiniMax (M2.7) — global or China endpoint
-oh preset generate-profile minimax-global claude --name claude-minimax
-oh preset generate-profile minimax-cn claude --name claude-minimax-cn
+clawteam preset generate-profile minimax-global claude --name claude-minimax
+clawteam preset generate-profile minimax-cn claude --name claude-minimax-cn
 
 # Or use the interactive TUI
-oh profile wizard
+clawteam profile wizard
 
 # Claude Code on a fresh machine/home may need this once
-oh profile doctor claude
+clawteam profile doctor claude
 
 # Smoke-test the profile before spawning workers
-MOONSHOT_API_KEY=... oh profile test claude-kimi
-MINIMAX_API_KEY=... oh profile test claude-minimax
+MOONSHOT_API_KEY=... clawteam profile test claude-kimi
+MINIMAX_API_KEY=... clawteam profile test claude-minimax
 ```
 
 Rules of thumb:
@@ -483,21 +483,21 @@ Rules of thumb:
 
 ### 🧭 Which Spawn Command Should I Use?
 
-Use `oh spawn [backend] [command] ...` with the command that already works on
+Use `clawteam spawn [backend] [command] ...` with the command that already works on
 your machine:
 
 ```bash
 # Claude Code
-oh spawn tmux claude --team my-team --agent-name alice --task "Implement OAuth2"
+clawteam spawn tmux claude --team my-team --agent-name alice --task "Implement OAuth2"
 
 # Codex
-oh spawn tmux codex --team my-team --agent-name bob --task "Write frontend tests"
+clawteam spawn tmux codex --team my-team --agent-name bob --task "Write frontend tests"
 
 # nanobot
-oh spawn tmux nanobot --team my-team --agent-name carol --task "Build the API"
+clawteam spawn tmux nanobot --team my-team --agent-name carol --task "Build the API"
 
 # A configured profile (recommended for non-default providers/models)
-oh spawn tmux --profile claude-kimi --team my-team --agent-name dave --task "Refactor the auth flow"
+clawteam spawn tmux --profile claude-kimi --team my-team --agent-name dave --task "Refactor the auth flow"
 ```
 
 Notes:
@@ -521,7 +521,7 @@ must satisfy a small compatibility contract:
 If you're unsure, test the agent standalone first, then wrap it with:
 
 ```bash
-oh spawn subprocess <your-agent> --team my-team --agent-name test --task "Say OK"
+clawteam spawn subprocess <your-agent> --team my-team --agent-name test --task "Say OK"
 ```
 
 If that works, switch to `tmux` for interactive monitoring.
@@ -534,13 +534,13 @@ All examples below assume the corresponding CLI already runs standalone on your 
 
 | Agent | Spawn Command | Status |
 |-------|--------------|--------|
-| [Claude Code](https://claude.ai/claude-code) | `oh spawn tmux claude --team ...` | ✅ Full support |
-| [Codex](https://openai.com/codex) | `oh spawn tmux codex --team ...` | ✅ Full support |
-| [OpenClaw](https://github.com/openclaw/openclaw) | `oh spawn tmux openclaw --team ...` | ✅ Full support |
-| [nanobot](https://github.com/HKUDS/nanobot) | `oh spawn tmux nanobot --team ...` | ✅ Full support |
-| [Kimi CLI](https://github.com/MoonshotAI/kimi-cli) | `oh spawn tmux kimi --team ...` | ✅ Full support |
-| [Cursor](https://cursor.com) | `oh spawn subprocess cursor --team ...` | 🔮 Experimental |
-| Custom scripts | `oh spawn subprocess python --team ...` | ✅ Full support |
+| [Claude Code](https://claude.ai/claude-code) | `clawteam spawn tmux claude --team ...` | ✅ Full support |
+| [Codex](https://openai.com/codex) | `clawteam spawn tmux codex --team ...` | ✅ Full support |
+| [OpenClaw](https://github.com/openclaw/openclaw) | `clawteam spawn tmux openclaw --team ...` | ✅ Full support |
+| [nanobot](https://github.com/HKUDS/nanobot) | `clawteam spawn tmux nanobot --team ...` | ✅ Full support |
+| [Kimi CLI](https://github.com/MoonshotAI/kimi-cli) | `clawteam spawn tmux kimi --team ...` | ✅ Full support |
+| [Cursor](https://cursor.com) | `clawteam spawn subprocess cursor --team ...` | 🔮 Experimental |
+| Custom scripts | `clawteam spawn subprocess python --team ...` | ✅ Full support |
 
 For provider-aware setups such as Claude Code via Moonshot Kimi, MiniMax, or Gemini via
 Vertex, use `profile` + `preset` and then spawn with `--profile`.
@@ -563,7 +563,7 @@ Vertex, use `profile` + `preset` and then spawn with `--profile`.
 - Each agent gets its own **git worktree** (separate branch)
 - No merge conflicts between parallel agents
 - Checkpoint, merge, and cleanup commands
-- Branch naming: `oh/{team}/{agent}`
+- Branch naming: `clawteam/{team}/{agent}`
 
 ### 📋 Task Tracking with Dependencies
 - Shared kanban: `pending` → `in_progress` → `completed` / `blocked`
@@ -588,7 +588,7 @@ Vertex, use `profile` + `preset` and then spawn with `--profile`.
 
 ### 🎪 Team Templates
 - **TOML files** define team archetypes (roles, tasks, prompts)
-- One command launches a complete team: `oh launch <template>`
+- One command launches a complete team: `clawteam launch <template>`
 - Built-in: AI Hedge Fund (7 agents). Create your own.
 - Variable substitution: `{goal}`, `{team_name}`, `{agent_name}`
 
@@ -612,18 +612,18 @@ Vertex, use `profile` + `preset` and then spawn with `--profile`.
 
 ## 🤖 How Agents Use ClawTeam
 
-When an agent is spawned via `oh spawn`, it receives an **auto-injected coordination prompt**:
+When an agent is spawned via `clawteam spawn`, it receives an **auto-injected coordination prompt**:
 
 ```
 ## Coordination Protocol (auto-injected into every spawned agent)
 
-- 📋 Check your tasks: oh task list <team> --owner <your-name>
-- ▶️ Start a task:     oh task update <team> <id> --status in_progress
-- ✅ Finish a task:    oh task update <team> <id> --status completed
-- 💬 Message leader:   oh inbox send <team> leader "status update..."
-- 💬 Message teammate: oh inbox send <team> <name> "info..."
-- 📨 Check inbox:      oh inbox receive <team>
-- 😴 Report idle:      oh lifecycle idle <team>
+- 📋 Check your tasks: clawteam task list <team> --owner <your-name>
+- ▶️ Start a task:     clawteam task update <team> <id> --status in_progress
+- ✅ Finish a task:    clawteam task update <team> <id> --status completed
+- 💬 Message leader:   clawteam inbox send <team> leader "status update..."
+- 💬 Message teammate: clawteam inbox send <team> <name> "info..."
+- 📨 Check inbox:      clawteam inbox receive <team>
+- 😴 Report idle:      clawteam lifecycle idle <team>
 ```
 
 This means **any CLI agent** can participate in a ClawTeam team — it just needs to run shell commands. No custom SDK, no API integration, no framework lock-in.
@@ -637,32 +637,32 @@ This means **any CLI agent** can participate in a ClawTeam team — it just need
 
 ```bash
 # 🏗️ Team lifecycle
-oh team spawn-team <team> -d "description" -n <leader>
-oh team discover                    # List all teams
-oh team status <team>               # Show members
-oh team cleanup <team> --force      # Delete team
+clawteam team spawn-team <team> -d "description" -n <leader>
+clawteam team discover                    # List all teams
+clawteam team status <team>               # Show members
+clawteam team cleanup <team> --force      # Delete team
 
 # 🚀 Spawn agents
-oh spawn --team <team> --agent-name <name> --task "do this"
-oh spawn tmux codex --team <team> --agent-name <name> --task "do this"
+clawteam spawn --team <team> --agent-name <name> --task "do this"
+clawteam spawn tmux codex --team <team> --agent-name <name> --task "do this"
 
 # 📋 Task management
-oh task create <team> "subject" -o <owner> --blocked-by <id1>,<id2>
-oh task update <team> <id> --status completed   # auto-unblocks dependents
-oh task list <team> --status blocked --owner worker1
-oh task wait <team> --timeout 300
+clawteam task create <team> "subject" -o <owner> --blocked-by <id1>,<id2>
+clawteam task update <team> <id> --status completed   # auto-unblocks dependents
+clawteam task list <team> --status blocked --owner worker1
+clawteam task wait <team> --timeout 300
 
 # 💬 Messaging
-oh inbox send <team> <to> "message"
-oh inbox broadcast <team> "message"
-oh inbox receive <team>             # consume messages
-oh inbox peek <team>                # read without consuming
+clawteam inbox send <team> <to> "message"
+clawteam inbox broadcast <team> "message"
+clawteam inbox receive <team>             # consume messages
+clawteam inbox peek <team>                # read without consuming
 
 # 📊 Monitoring
-oh board show <team>                # terminal kanban
-oh board live <team> --interval 3   # auto-refresh
-oh board attach <team>              # tiled tmux view
-oh board serve --port 8080          # web UI
+clawteam board show <team>                # terminal kanban
+clawteam board live <team> --interval 3   # auto-refresh
+clawteam board attach <team>              # tiled tmux view
+clawteam board serve --port 8080          # web UI
 ```
 
 </details>
@@ -672,29 +672,29 @@ oh board serve --port 8080          # web UI
 
 ```bash
 # 🌳 Workspace (git worktree management)
-oh workspace list <team>
-oh workspace checkpoint <team> <agent>    # auto-commit
-oh workspace merge <team> <agent>         # merge back to main
-oh workspace cleanup <team> <agent>       # remove worktree
+clawteam workspace list <team>
+clawteam workspace checkpoint <team> <agent>    # auto-commit
+clawteam workspace merge <team> <agent>         # merge back to main
+clawteam workspace cleanup <team> <agent>       # remove worktree
 
 # 📝 Plan approval
-oh plan submit <team> <agent> "plan" --summary "TL;DR"
-oh plan approve <team> <plan-id> <agent> --feedback "LGTM"
-oh plan reject <team> <plan-id> <agent> --feedback "Revise X"
+clawteam plan submit <team> <agent> "plan" --summary "TL;DR"
+clawteam plan approve <team> <plan-id> <agent> --feedback "LGTM"
+clawteam plan reject <team> <plan-id> <agent> --feedback "Revise X"
 
 # 🔄 Lifecycle
-oh lifecycle request-shutdown <team> <agent> --reason "done"
-oh lifecycle approve-shutdown <team> <request-id> <agent>
-oh lifecycle idle <team>
+clawteam lifecycle request-shutdown <team> <agent> --reason "done"
+clawteam lifecycle approve-shutdown <team> <request-id> <agent>
+clawteam lifecycle idle <team>
 
 # 🎪 Templates
-oh launch <template> --team <name> --goal "Build X"
-oh template list
+clawteam launch <template> --team <name> --goal "Build X"
+clawteam template list
 
 # ⚙️ Config
-oh config show
-oh config set transport p2p
-oh config health
+clawteam config show
+clawteam config set transport p2p
+clawteam config health
 ```
 
 | Setting | Env Var | Default | Description |
@@ -715,19 +715,19 @@ oh config health
   Human: "Optimize this LLM"
          │
          ▼
-  ┌──────────────┐     oh spawn     ┌──────────────┐
+  ┌──────────────┐     clawteam spawn     ┌──────────────┐
   │ 🦞 Leader    │ ──────────────────────► │ 🤖 Worker    │
   │ (Claude Code)│ ──────┐                │ (Claude Code)│
   │              │       │                │ git worktree │
   │ Uses:        │       │                │ tmux window  │
-  │ • spawn      │       │ oh spawn └──────────────┘
+  │ • spawn      │       │ clawteam spawn └──────────────┘
   │ • task create│       │
   │ • inbox send │       ▼                ┌──────────────┐
   │ • board show │ ──────────────────────► │ 🤖 Worker    │
   │ • task wait  │       │                │ (Codex)      │
   └──────────────┘       │                │ git worktree │
                          │                │ tmux window  │
-                         │ oh spawn └──────────────┘
+                         │ clawteam spawn └──────────────┘
                          ▼
                    ┌──────────────┐
                    │ 🤖 Worker    │    Each worker uses:
@@ -751,8 +751,8 @@ All state lives in `~/.clawteam/` as JSON files. No database, no server, no clou
 
 | Spawn Default | Value | Override |
 |---------------|-------|----------|
-| Backend | `tmux` | `oh spawn subprocess ...` |
-| Command | `claude` | `oh spawn tmux codex ...` |
+| Backend | `tmux` | `clawteam spawn subprocess ...` |
+| Command | `claude` | `clawteam spawn tmux codex ...` |
 | Workspace | `auto` (git worktree) | `--no-workspace` |
 | Permissions | skip | `--no-skip-permissions` |
 

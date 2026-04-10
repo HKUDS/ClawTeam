@@ -34,6 +34,11 @@ class TestEnvHelpers:
         monkeypatch.delenv("CLAUDE_CODE_AGENT_LEADER", raising=False)
         assert _env_bool("CLAWTEAM_AGENT_LEADER", "CLAUDE_CODE_AGENT_LEADER") is False
 
+    def test_env_bool_uses_first_present_key(self, monkeypatch):
+        monkeypatch.setenv("CLAWTEAM_PLAN_MODE_REQUIRED", "0")
+        monkeypatch.setenv("OH_PLAN_MODE_REQUIRED", "1")
+        assert _env_bool("CLAWTEAM_PLAN_MODE_REQUIRED", "OH_PLAN_MODE_REQUIRED") is False
+
 
 class TestFromEnv:
     def test_from_env_with_oh_vars(self, monkeypatch):
@@ -56,6 +61,38 @@ class TestFromEnv:
         monkeypatch.setenv("CLAUDE_CODE_AGENT_NAME", "claude-agent")
         identity = AgentIdentity.from_env()
         assert identity.agent_name == "claude-agent"
+
+    def test_from_env_plan_mode_uses_oh_before_claude_code(self, monkeypatch):
+        monkeypatch.delenv("CLAWTEAM_PLAN_MODE_REQUIRED", raising=False)
+        monkeypatch.setenv("OH_PLAN_MODE_REQUIRED", "1")
+        monkeypatch.setenv("CLAUDE_CODE_PLAN_MODE_REQUIRED", "0")
+
+        identity = AgentIdentity.from_env()
+        assert identity.plan_mode_required is True
+
+    def test_from_env_plan_mode_falls_back_to_claude_code(self, monkeypatch):
+        monkeypatch.delenv("CLAWTEAM_PLAN_MODE_REQUIRED", raising=False)
+        monkeypatch.delenv("OH_PLAN_MODE_REQUIRED", raising=False)
+        monkeypatch.setenv("CLAUDE_CODE_PLAN_MODE_REQUIRED", "true")
+
+        identity = AgentIdentity.from_env()
+        assert identity.plan_mode_required is True
+
+    def test_from_env_plan_mode_clawteam_overrides_oh_and_claude_code_true(self, monkeypatch):
+        monkeypatch.setenv("CLAWTEAM_PLAN_MODE_REQUIRED", "1")
+        monkeypatch.setenv("OH_PLAN_MODE_REQUIRED", "0")
+        monkeypatch.setenv("CLAUDE_CODE_PLAN_MODE_REQUIRED", "0")
+
+        identity = AgentIdentity.from_env()
+        assert identity.plan_mode_required is True
+
+    def test_from_env_plan_mode_clawteam_overrides_oh_and_claude_code_false(self, monkeypatch):
+        monkeypatch.setenv("CLAWTEAM_PLAN_MODE_REQUIRED", "0")
+        monkeypatch.setenv("OH_PLAN_MODE_REQUIRED", "1")
+        monkeypatch.setenv("CLAUDE_CODE_PLAN_MODE_REQUIRED", "true")
+
+        identity = AgentIdentity.from_env()
+        assert identity.plan_mode_required is False
 
     def test_from_env_defaults(self, monkeypatch):
         for key in ("CLAWTEAM_AGENT_ID", "CLAWTEAM_AGENT_NAME", "CLAWTEAM_AGENT_TYPE",
@@ -129,6 +166,7 @@ class TestToEnv:
         assert restored.agent_type == original.agent_type
         assert restored.team_name == original.team_name
         assert restored.is_leader == original.is_leader
+        assert restored.plan_mode_required == original.plan_mode_required
 
 
 class TestInTeam:

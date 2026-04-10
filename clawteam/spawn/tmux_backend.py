@@ -32,7 +32,7 @@ _SHELL_ENV_KEY_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 class TmuxBackend(SpawnBackend):
     """Spawn agents in tmux windows for visual monitoring.
 
-    Each agent gets its own tmux window in a session named ``oh-{team}``.
+    Each agent gets its own tmux window in a session named ``clawteam-{team}``.
     Agents run in interactive mode so their work is visible in the tmux pane.
     """
 
@@ -198,7 +198,7 @@ class TmuxBackend(SpawnBackend):
             return (
                 f"Error: tmux pane for '{normalized_command[0]}' did not become visible "
                 f"within {pane_ready_timeout:.1f}s. Verify the CLI works standalone before "
-                "using it with oh spawn."
+                "using it with clawteam spawn."
             )
 
         _confirm_workspace_trust_if_prompted(

@@ -57,7 +57,7 @@ def main(
         None, "--transport", help="Transport backend: file or p2p.",
     ),
 ):
-    """oh - Framework-agnostic multi-agent coordination CLI."""
+    """clawteam - Framework-agnostic multi-agent coordination CLI."""
     global _json_output, _data_dir
     _json_output = json_out
     if data_dir:
@@ -3110,7 +3110,7 @@ def spawn_agent(
             name=_team,
             leader_name=_name,
             leader_id=_id,
-            description="Auto-created by oh spawn",
+            description="Auto-created by clawteam spawn",
             user=user_name,
             leader_agent_type=agent_type,
         )
@@ -3273,7 +3273,7 @@ def identity_set(
     else:
         console.print("Run the following to set your identity:\n")
         console.print(output)
-        console.print(f"\nOr use: eval $(oh identity set {' '.join(sys.argv[3:])})")
+        console.print(f"\nOr use: eval $(clawteam identity set {' '.join(sys.argv[3:])})")
 
 
 # ============================================================================
@@ -4086,9 +4086,9 @@ def launch_team(
         console.print(table)
         console.print()
         if be_name == "tmux":
-            console.print(f"[bold]Attach:[/bold] tmux attach -t oh-{t_name}")
-        console.print(f"[bold]Board:[/bold]  oh board show {t_name}")
-        console.print(f"[bold]Inbox:[/bold]  oh inbox peek {t_name} --agent <name>")
+            console.print(f"[bold]Attach:[/bold] tmux attach -t clawteam-{t_name}")
+        console.print(f"[bold]Board:[/bold]  clawteam board show {t_name}")
+        console.print(f"[bold]Inbox:[/bold]  clawteam inbox peek {t_name} --agent <name>")
 
     _output(out, _human)
 
@@ -4255,7 +4255,7 @@ def harness_start(
         console.print(f"  Team: {team}")
         console.print(f"  Goal: {goal}")
         console.print(f"  Phase: {orch.state.current_phase.value}")
-        console.print(f"\nAdvance: oh harness advance {team}")
+        console.print(f"\nAdvance: clawteam harness advance {team}")
 
     _output({"harness_id": harness_id, "team": team, "phase": orch.state.current_phase.value}, _human)
 
@@ -4437,7 +4437,7 @@ def run_command(
 ) -> None:
     """Wrap a CLI agent with ClawTeam lifecycle management.
 
-    Example: oh run claude "Fix the login bug"
+    Example: clawteam run claude "Fix the login bug"
     """
     import uuid as _uuid
 
