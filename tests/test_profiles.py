@@ -158,6 +158,53 @@ def test_profile_doctor_claude_updates_existing_state_file(tmp_path):
     assert state["hasCompletedOnboarding"] is True
 
 
+def test_apply_profile_pi_model_flag_is_injected():
+    """Pi profiles should receive --model from profile.model."""
+    profile = AgentProfile(
+        agent="pi",
+        model="anthropic/claude-sonnet-4.6",
+    )
+
+    command, env, agent = apply_profile(profile)
+
+    assert agent == "pi"
+    assert command == ["pi", "--model", "anthropic/claude-sonnet-4.6"]
+    assert env == {}
+
+
+def test_apply_profile_pi_model_not_duplicated_when_already_present():
+    """If --model is already in the command, profile.model should not add another."""
+    profile = AgentProfile(
+        agent="pi",
+        model="anthropic/claude-sonnet-4.6",
+        command=["pi", "--model", "google/gemini-2.5-pro"],
+    )
+
+    command, env, agent = apply_profile(profile)
+
+    assert agent == "pi"
+    assert command == ["pi", "--model", "google/gemini-2.5-pro"]
+
+
+def test_apply_profile_pi_no_base_url_or_api_key_env_injection(monkeypatch):
+    """Pi resolves base URL and API keys from --provider or provider-specific env."""
+    monkeypatch.setenv("MY_API_KEY", "test-key")
+    profile = AgentProfile(
+        agent="pi",
+        model="google/gemini-2.5-pro",
+        api_key_env="MY_API_KEY",
+    )
+
+    command, env, agent = apply_profile(profile)
+
+    assert agent == "pi"
+    assert command == ["pi", "--model", "google/gemini-2.5-pro"]
+    # Pi has no built-in base_url_env or api_key_target_env mapping,
+    # so the profile's api_key_env should NOT produce an automatic injection.
+    assert "ANTHROPIC_AUTH_TOKEN" not in env
+    assert "OPENAI_API_KEY" not in env
+
+
 def test_profile_wizard_generates_profile_from_preset(monkeypatch, tmp_path):
     runner = CliRunner()
     env = {

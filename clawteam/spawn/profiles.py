@@ -154,7 +154,7 @@ def _command_has_model_arg(command: list[str]) -> bool:
 
 
 def _model_flag(agent: str) -> str | None:
-    if agent in {"claude", "claude-code", "codex", "codex-cli", "gemini", "kimi"}:
+    if agent in {"claude", "claude-code", "codex", "codex-cli", "gemini", "kimi", "pi"}:
         return "--model"
     return None
 
@@ -168,6 +168,8 @@ def _base_url_env_var(agent: str) -> str | None:
         return "GOOGLE_GEMINI_BASE_URL"
     if agent == "kimi":
         return "KIMI_BASE_URL"
+    if agent == "pi":
+        return None  # pi resolves base URL from --provider or env
     return None
 
 
@@ -180,4 +182,6 @@ def _api_key_target_env(agent: str) -> str | None:
         return "GEMINI_API_KEY"
     if agent == "kimi":
         return "KIMI_API_KEY"
+    if agent == "pi":
+        return None  # pi resolves API key from --api-key or provider-specific env vars
     return None
