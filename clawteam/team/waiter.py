@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import signal
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Callable
@@ -68,15 +69,22 @@ class TaskWaiter:
         self._running = True
         start = time.monotonic()
 
-        # Save and install signal handlers
-        prev_sigint = signal.getsignal(signal.SIGINT)
-        prev_sigterm = signal.getsignal(signal.SIGTERM)
+        install_signal_handlers = threading.current_thread() is threading.main_thread()
+        prev_sigint = None
+        prev_sigterm = None
 
         def _handle_signal(signum, frame):
             self._running = False
 
-        signal.signal(signal.SIGINT, _handle_signal)
-        signal.signal(signal.SIGTERM, _handle_signal)
+        if install_signal_handlers:
+            # Python only allows signal handlers to be installed from the main
+            # thread. TaskWaiter is sometimes executed in a worker thread (for
+            # example via asyncio.run_in_executor), so treat signal handling as
+            # best-effort and skip it there.
+            prev_sigint = signal.getsignal(signal.SIGINT)
+            prev_sigterm = signal.getsignal(signal.SIGTERM)
+            signal.signal(signal.SIGINT, _handle_signal)
+            signal.signal(signal.SIGTERM, _handle_signal)
 
         last_summary = ""
         try:
@@ -160,9 +168,11 @@ class TaskWaiter:
                 task_details=[_task_summary(t) for t in tasks],
             )
         finally:
-            # Restore original signal handlers
-            signal.signal(signal.SIGINT, prev_sigint)
-            signal.signal(signal.SIGTERM, prev_sigterm)
+            if install_signal_handlers:
+                # Restore original signal handlers when they were installed by
+                # this waiter invocation.
+                signal.signal(signal.SIGINT, prev_sigint)
+                signal.signal(signal.SIGTERM, prev_sigterm)
 
 
     def _check_dead_agents(self) -> None:

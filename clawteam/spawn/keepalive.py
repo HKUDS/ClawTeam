@@ -32,6 +32,10 @@ def build_resume_command(command: list[str]) -> list[str]:
         return [normalized[0], "--continue"]
     if executable == "pi":
         return [normalized[0], "--continue"]
+    if executable == "openclaw":
+        # OpenClaw resumes via --session-id (injected by NativeCliAdapter),
+        # so the resume command is just the base `openclaw agent` invocation.
+        return [normalized[0], "agent"]
     return []
 
 
