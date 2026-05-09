@@ -1046,19 +1046,32 @@ def profile_doctor(
 
     claude_state_path = Path.home() / ".claude.json"
     before_exists = claude_state_path.exists()
-    data: dict[str, object]
+    data: dict[str, object] = {}
+    corrupted = False
     if before_exists:
+        raw = claude_state_path.read_text(encoding="utf-8")
         try:
-            data = json.loads(claude_state_path.read_text(encoding="utf-8"))
-            if not isinstance(data, dict):
-                data = {}
-        except Exception:
-            data = {}
-    else:
-        data = {}
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                data = parsed
+            else:
+                corrupted = True
+        except (json.JSONDecodeError, ValueError):
+            corrupted = True
+
+        if corrupted:
+            backup_path = claude_state_path.with_suffix(".json.bak")
+            backup_path.write_text(raw, encoding="utf-8")
+            console.print(
+                f"[yellow]Warning:[/yellow] {claude_state_path} contained invalid data; "
+                f"backed up to {backup_path}"
+            )
 
     data["hasCompletedOnboarding"] = True
-    claude_state_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    from clawteam.fileutil import atomic_write_text
+
+    atomic_write_text(claude_state_path, json.dumps(data, indent=2))
 
     result = {
         "client": "claude",

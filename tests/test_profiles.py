@@ -171,6 +171,48 @@ def test_profile_doctor_claude_updates_existing_state_file(tmp_path):
     assert state["hasCompletedOnboarding"] is True
 
 
+def test_profile_doctor_claude_backs_up_corrupted_state_file(tmp_path):
+    runner = CliRunner()
+    env = {
+        "HOME": str(tmp_path),
+        "CLAWTEAM_DATA_DIR": str(tmp_path / ".clawteam"),
+    }
+    state_path = Path(tmp_path) / ".claude.json"
+    state_path.write_text("NOT VALID JSON {{{", encoding="utf-8")
+
+    result = runner.invoke(app, ["profile", "doctor", "claude"], env=env)
+
+    assert result.exit_code == 0
+    normalized = " ".join(result.output.split())
+    assert "invalid data" in normalized
+    assert ".bak" in normalized
+    backup_path = Path(tmp_path) / ".claude.json.bak"
+    assert backup_path.read_text(encoding="utf-8") == "NOT VALID JSON {{{"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["hasCompletedOnboarding"] is True
+
+
+def test_profile_doctor_claude_backs_up_non_dict_state_file(tmp_path):
+    runner = CliRunner()
+    env = {
+        "HOME": str(tmp_path),
+        "CLAWTEAM_DATA_DIR": str(tmp_path / ".clawteam"),
+    }
+    state_path = Path(tmp_path) / ".claude.json"
+    state_path.write_text(json.dumps(["not", "a", "dict"]), encoding="utf-8")
+
+    result = runner.invoke(app, ["profile", "doctor", "claude"], env=env)
+
+    assert result.exit_code == 0
+    normalized = " ".join(result.output.split())
+    assert "invalid data" in normalized
+    assert ".bak" in normalized
+    backup_path = Path(tmp_path) / ".claude.json.bak"
+    assert json.loads(backup_path.read_text(encoding="utf-8")) == ["not", "a", "dict"]
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["hasCompletedOnboarding"] is True
+
+
 def test_profile_wizard_generates_profile_from_preset(monkeypatch, tmp_path):
     runner = CliRunner()
     env = {
