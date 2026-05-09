@@ -5,6 +5,12 @@
       "source": "anthropics/skills",
       "sourceType": "github",
       "computedHash": "063a0e6448123cd359ad0044cc46b0e490cc7964d45ef4bb9fd842bd2ffbca67"
+    },
+    "mmx-cli": {
+      "source": "MiniMax-AI/cli",
+      "sourceType": "github",
+      "path": "skill/",
+      "computedHash": "54adc09c298ca1fd11457a8cb6a9eaf558a4d0758570dfb43e82f3002ec32c16"
     }
   }
 }
