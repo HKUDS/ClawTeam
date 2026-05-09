@@ -2,10 +2,29 @@
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from clawteam.config import load_config
+from clawteam.config import config_path, load_config
+
+_tz_cache: tuple[float, str] | None = None
+
+
+def _get_timezone() -> str:
+    """Return the configured display timezone, cached by config file mtime."""
+    global _tz_cache
+    try:
+        mtime = os.path.getmtime(config_path())
+    except OSError:
+        mtime = 0.0
+
+    if _tz_cache is not None and _tz_cache[0] == mtime:
+        return _tz_cache[1]
+
+    tz_name = (load_config().timezone or "UTC").strip() or "UTC"
+    _tz_cache = (mtime, tz_name)
+    return tz_name
 
 
 def _parse_timestamp(value: str) -> datetime | None:
@@ -35,7 +54,7 @@ def format_timestamp(value: str | None) -> str:
     if dt is None:
         return str(value)[:19]
 
-    tz_name = (load_config().timezone or "UTC").strip() or "UTC"
+    tz_name = _get_timezone()
     if tz_name.upper() == "UTC":
         return dt.astimezone(timezone.utc).isoformat()[:19]
 

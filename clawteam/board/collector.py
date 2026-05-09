@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
 from clawteam.team.mailbox import MailboxManager
 from clawteam.team.manager import TeamManager
 from clawteam.team.tasks import TaskStore
@@ -100,7 +98,7 @@ class BoardCollector:
             "blocked": [],
         }
         for t in all_tasks:
-            td = json.loads(t.model_dump_json(by_alias=True, exclude_none=True))
+            td = t.model_dump(mode="json", by_alias=True, exclude_none=True)
             grouped[t.status.value].append(td)
 
         summary = {
@@ -120,7 +118,7 @@ class BoardCollector:
         try:
             events = mailbox.get_event_log(limit=200)
             for msg in events:
-                payload = json.loads(msg.model_dump_json(by_alias=True, exclude_none=True))
+                payload = msg.model_dump(mode="json", by_alias=True, exclude_none=True)
                 from_info = member_aliases.get(payload.get("from") or "")
                 to_info = member_aliases.get(payload.get("to") or "")
                 if from_info:
