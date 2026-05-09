@@ -168,6 +168,8 @@ def _base_url_env_var(agent: str) -> str | None:
         return "GOOGLE_GEMINI_BASE_URL"
     if agent == "kimi":
         return "KIMI_BASE_URL"
+    if agent == "pi":
+        return None  # pi resolves base URL from --provider or env
     return None
 
 
@@ -180,4 +182,6 @@ def _api_key_target_env(agent: str) -> str | None:
         return "GEMINI_API_KEY"
     if agent == "kimi":
         return "KIMI_API_KEY"
+    if agent == "pi":
+        return None  # pi resolves API key from --api-key or provider-specific env vars
     return None
