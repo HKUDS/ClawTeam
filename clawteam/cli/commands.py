@@ -4137,9 +4137,20 @@ def launch_team(
         a_id = agent_ids[agent.name]
         a_cmd = agent.command or cmd
         a_env: dict[str, str] = {}
-        if resolved_profile:
+        
+        # Determine which profile to use: agent-specific takes priority over global
+        profile_to_apply = None
+        if agent.profile:
+            try:
+                profile_to_apply = load_profile(agent.profile)
+            except ValueError as e:
+                console.print(f"[yellow]Warning: profile '{agent.profile}' for agent '{agent.name}' not found, using fallback[/yellow]")
+        elif resolved_profile:
+            profile_to_apply = resolved_profile
+        
+        if profile_to_apply:
             command_seed = list(a_cmd) if (agent.command or command_override) else []
-            a_cmd, a_env, _ = apply_profile(resolved_profile, command=command_seed)
+            a_cmd, a_env, _ = apply_profile(profile_to_apply, command=command_seed, agent_name=agent.name)
 
         # Variable substitution
         rendered = render_task(

@@ -1,0 +1,135 @@
+[template]
+name = "clickup-triage-duo"
+description = "2-member ClickUp triage team: Copilot CLI leads, Quin/OpenClaw works. Triages all non-complete ClickUp tasks, updates fields+comments, dispatches to working ClawTeams."
+backend = "subprocess"
+
+[template.leader]
+name = "copilot-lead"
+type = "leader"
+profile = "copilot"
+task = """You are the COPILOT LEADER for ClawTeam {team_name}.
+GOAL: {goal}
+
+=== YOUR FULL PROTOCOL ===
+
+STEP 1 — FETCH NON-COMPLETE TASKS
+Call ClickUp MCP at http://127.0.0.1:8063/mcp using get_workspace_tasks.
+Filter OUT terminal statuses: done, complete, completed, cancelled, closed.
+Collect all task IDs, names, statuses, and list names.
+
+STEP 2 — ANNOUNCE TO MEMBER
+Send a kickoff message to quin-worker:
+  clawteam inbox send {team_name} quin-worker "KICKOFF: {total_tasks} non-complete tasks to triage. Sending batches of 10."
+
+STEP 3 — BATCH AND DISPATCH
+For each batch of up to 10 tasks, do TWO things:
+  a) Create a ClawTeam task for tracking:
+       clawteam task create {team_name} "Triage batch N of M: task_ids [id1, id2, ...]" -o quin-worker
+  b) Send the batch via inbox:
+       clawteam inbox send {team_name} quin-worker 'TRIAGE_BATCH: {"batch": N, "total_batches": M, "tasks": [{"id": "...", "name": "...", "status": "...", "list": "..."}, ...]}'
+
+STEP 4 — WAIT FOR ACK
+After each batch, wait for quin-worker's BATCH_DONE reply:
+  clawteam inbox receive {team_name}
+If no reply in 60 seconds, re-check:
+  clawteam board show {team_name}
+  clawteam inbox receive {team_name}
+Do NOT send next batch until current BATCH_DONE is received.
+
+STEP 5 — VERIFY DISPATCH
+After all batches are acknowledged, verify REAL downstream routing:
+  - Check `~/.clawteam/teams/cqc-clickup-triage/events/*.json` for the task IDs you sent.
+  - Check `clawteam inbox peek cqc-clickup-triage --agent triage-lead` only as a transient queue check, not as proof of success.
+  - Verify actual downstream dispatch evidence in the real target teams, not in `{team_name}`.
+CRITICAL:
+  - NEVER send synthetic `TRIAGE_DISPATCH` messages inside `{team_name}`.
+  - A message written to `{team_name}/inboxes/cqc-platform`, `{team_name}/inboxes/cqc-content`, etc. is a FAILURE, not a dispatch.
+  - Do not declare completion until each task has evidence of handoff outside `{team_name}`.
+
+STEP 6 — FINAL SUMMARY
+Broadcast completion to the whole team:
+  clawteam inbox broadcast {team_name} "ALL_TASKS_TRIAGED: <N> tasks processed. Routes: cqc-platform=<n1>, cqc-revenue-research=<n2>, cqc-content=<n3>, cqc-research=<n4>, cqc-clickup-triage=<n5>"
+
+STEP 7 — MARK COMPLETE
+Update all ClawTeam tasks to done:
+  clawteam task update {team_name} <task_id> --status done
+
+=== ROUTING MAP ===
+Use this to understand quin-worker's routing decisions:
+  - Platform / infra / code / tooling / security / ops     → cqc-platform
+  - Revenue / outreach / LinkedIn / Apollo / Gumroad / CRM → cqc-revenue-research
+  - Content / writing / social media / blog / docs         → cqc-content
+  - Research / analysis / market / competitive intel       → cqc-research
+  - ClickUp intake / unknown / ambiguous                   → cqc-clickup-triage
+
+=== EXEC POLICY NOTE ===
+If clawteam task update is blocked by exec policy, send results via inbox instead. Do NOT retry a blocked command.
+"""
+
+[[template.agents]]
+name = "quin-worker"
+type = "worker"
+profile = "openclaw-gateway-spawn"
+task = """You are the QUIN WORKER for ClawTeam {team_name}.
+GOAL: {goal}
+
+=== YOUR FULL PROTOCOL ===
+
+STEP 1 — WAIT FOR KICKOFF
+Listen for the KICKOFF message from copilot-lead:
+  clawteam inbox receive {team_name}
+
+STEP 2 — PROCESS EACH TRIAGE_BATCH
+When you receive a TRIAGE_BATCH message, process each task in the batch:
+
+For each task with id=TASK_ID:
+
+  a) READ TASK STATE
+     Call ClickUp MCP at http://127.0.0.1:8063/mcp using get_task with task_id=TASK_ID.
+     Note: current status, assignee, priority, due_date, description, list name.
+
+  b) DETERMINE TARGET TEAM
+     Use the task's list name, tags, title, and description to classify:
+       - Platform / infra / code / tooling / security / ops     → cqc-platform
+       - Revenue / outreach / LinkedIn / Apollo / Gumroad / CRM → cqc-revenue-research
+       - Content / writing / social media / blog / docs         → cqc-content
+       - Research / analysis / market / competitive intel       → cqc-research
+       - ClickUp intake / unknown / ambiguous                   → cqc-clickup-triage
+
+  c) UPDATE TASK FIELDS
+     Call update_task to fix any missing or stale fields:
+       - If assignee is missing: set to the appropriate team lead
+       - If priority is missing: set based on task urgency (normal default)
+       - If due_date is missing or in the past: set to a reasonable future date
+       - Status rules (CRITICAL — loop prevention):
+           * NEVER set status to: backlog, ready, "to do", open, new, scheduled, waiting, blocked.
+             These values trigger shouldRetriageOnStatusChange=true in the webhook plugin and will
+             re-queue the task for triage again, creating an infinite loop.
+           * Safe: "in progress" if the task is clearly owned. Otherwise leave status unchanged.
+           * Default: leave status unchanged unless obviously wrong.
+     Track which fields you changed.
+
+  d) ADD TRIAGE COMMENT — ALWAYS include the source marker
+     Call create_comment with this EXACT prefix (required for loop guard in webhook plugin):
+       "[cu-triage-duo] Triaged at {ISO_TIMESTAMP}. Target: {TARGET_TEAM}. Fields updated: {FIELDS_CHANGED_LIST}. Dispatching for processing."
+     The "[cu-triage-duo]" prefix is the TRIAGE_SOURCE_MARKER. The webhook plugin detects it in
+     update history and suppresses self-triggered retriage events.
+
+  e) DISPATCH TO DOWNSTREAM CLAWTEAM
+      Send an inbox message to alert the target ClawTeam:
+        clawteam inbox send cqc-clickup-triage triage-lead "DISPATCH: task_id={TASK_ID} name={TASK_NAME} target_team={TARGET_TEAM} url=https://app.clickup.com/t/{TASK_ID}"
+      NOTE: cqc-clickup-triage/triage-lead is the routing hub. It will forward from there.
+      After each send, verify the command returned `OK Message sent to 'triage-lead'`.
+
+STEP 3 — SEND BATCH ACK
+After processing all tasks in the batch:
+  clawteam inbox send {team_name} copilot-lead 'BATCH_DONE: {"batch": N, "processed": <count>, "results": [{"id": "...", "name": "...", "target": "...", "fields_updated": [...]}], "dispatched_task_ids": ["..."]}'
+
+STEP 4 — REPEAT
+Go back to STEP 2 and wait for the next TRIAGE_BATCH message.
+Continue until you receive the ALL_TASKS_TRIAGED broadcast from copilot-lead.
+
+=== EXEC POLICY NOTE ===
+If clawteam task update is blocked by exec policy, report the result via inbox to copilot-lead instead of retrying. Use:
+  clawteam inbox send {team_name} copilot-lead "EXEC_BLOCKED: task_id={id} blocked_cmd={cmd}"
+"""

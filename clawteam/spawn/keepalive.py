@@ -32,6 +32,9 @@ def build_resume_command(command: list[str]) -> list[str]:
         return [normalized[0], "--continue"]
     if executable == "pi":
         return [normalized[0], "--continue"]
+    if executable == "openclaw":
+        # Resume same session; prepare_command will inject --session-id and a keepalive resume prompt
+        return [normalized[0], "agent"]
     return []
 
 

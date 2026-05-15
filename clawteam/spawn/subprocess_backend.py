@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 
-from clawteam.spawn.adapters import NativeCliAdapter, is_claude_command, is_pi_command
+from clawteam.spawn.adapters import NativeCliAdapter, is_claude_command, is_openclaw_command, is_pi_command
 from clawteam.spawn.base import SpawnBackend
 from clawteam.spawn.cli_env import build_spawn_path, resolve_clawteam_executable
 from clawteam.spawn.command_validation import validate_spawn_command
@@ -96,7 +96,7 @@ class SubprocessBackend(SpawnBackend):
         resume_command: list[str] = []
         if resume_base:
             resume_prompt = None
-            if keepalive and is_claude_command(normalized_command):
+            if keepalive and (is_claude_command(normalized_command) or is_openclaw_command(normalized_command)):
                 resume_prompt = build_keepalive_resume_prompt(team_name, agent_name)
             resume_prepared = self._adapter.prepare_command(
                 resume_base,
