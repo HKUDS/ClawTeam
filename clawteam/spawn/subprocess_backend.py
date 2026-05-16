@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 
-from clawteam.spawn.adapters import NativeCliAdapter, is_claude_command, is_pi_command
+from clawteam.spawn.adapters import NativeCliAdapter, is_claude_command, is_codex_command, is_pi_command
 from clawteam.spawn.base import SpawnBackend
 from clawteam.spawn.cli_env import build_spawn_path, resolve_clawteam_executable
 from clawteam.spawn.command_validation import validate_spawn_command
@@ -136,15 +136,45 @@ class SubprocessBackend(SpawnBackend):
                 keepalive=keepalive,
             )
 
-        process = subprocess.Popen(
-            shell_cmd,
-            shell=True,
-            env=spawn_env,
-            # Subprocess agents are fire-and-forget; unread pipes can block long-lived runs.
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            cwd=cwd,
-        )
+        log_dir = os.path.join(str(get_data_dir()), "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        log_out = open(os.path.join(log_dir, f"{agent_name}.out.log"), "w", encoding="utf-8")
+        log_err = open(os.path.join(log_dir, f"{agent_name}.err.log"), "w", encoding="utf-8")
+
+        if sys.platform == "win32":
+            if is_claude_command(normalized_command) and "-p" in final_command:
+                p_idx = final_command.index("-p")
+                long_prompt = final_command[p_idx + 1]
+                if len(long_prompt) > 200:
+                    instruction_file = os.path.join(str(cwd or "."), "CLAWTEAM_INSTRUCTIONS.md")
+                    with open(instruction_file, "w", encoding="utf-8") as f:
+                        f.write(long_prompt)
+                    final_command[p_idx + 1] = "Read CLAWTEAM_INSTRUCTIONS.md and follow all instructions inside. Do NOT ask for confirmation, just execute."
+            elif is_codex_command(normalized_command) and len(final_command) > 1:
+                last_arg = final_command[-1]
+                if len(last_arg) > 200 and not last_arg.startswith("-"):
+                    instruction_file = os.path.join(str(cwd or "."), "CLAWTEAM_INSTRUCTIONS.md")
+                    with open(instruction_file, "w", encoding="utf-8") as f:
+                        f.write(last_arg)
+                    final_command[-1] = "Read CLAWTEAM_INSTRUCTIONS.md and follow all instructions inside. Do NOT ask for confirmation, just execute."
+            cmd_str = subprocess.list2cmdline(final_command)
+            process = subprocess.Popen(
+                cmd_str,
+                shell=True,
+                env=spawn_env,
+                stdout=log_out,
+                stderr=log_err,
+                cwd=cwd,
+            )
+        else:
+            process = subprocess.Popen(
+                shell_cmd,
+                shell=True,
+                env=spawn_env,
+                stdout=log_out,
+                stderr=log_err,
+                cwd=cwd,
+            )
         self._processes[agent_name] = process
 
         # Persist spawn info for liveness checking
