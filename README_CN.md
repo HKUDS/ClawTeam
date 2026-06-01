@@ -407,7 +407,7 @@ clawteam preset show moonshot-cn
 # 从 preset 生成可复用的 runtime profile
 clawteam preset generate-profile moonshot-cn claude --name claude-kimi
 
-# MiniMax（M2.7）— 国际或国内端点
+# MiniMax（M3）— 国际或国内端点
 clawteam preset generate-profile minimax-global claude --name claude-minimax
 clawteam preset generate-profile minimax-cn claude --name claude-minimax-cn
 

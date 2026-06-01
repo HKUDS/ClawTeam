@@ -467,7 +467,7 @@ clawteam preset show moonshot-cn
 # Generate a reusable runtime profile from a preset
 clawteam preset generate-profile moonshot-cn claude --name claude-kimi
 
-# MiniMax (M2.7) — global or China endpoint
+# MiniMax (M3) — global or China endpoint
 clawteam preset generate-profile minimax-global claude --name claude-minimax
 clawteam preset generate-profile minimax-cn claude --name claude-minimax-cn
 

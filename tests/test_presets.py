@@ -36,11 +36,11 @@ def test_generate_profile_from_minimax_global_preset():
 
     assert name == "claude-minimax-global"
     assert profile.agent == "claude"
-    assert profile.model == "MiniMax-M2.7"
+    assert profile.model == "MiniMax-M3"
     assert profile.base_url == "https://api.minimax.io/anthropic"
     assert profile.api_key_env == "MINIMAX_API_KEY"
-    assert profile.env["ANTHROPIC_MODEL"] == "MiniMax-M2.7"
-    assert profile.env["ANTHROPIC_DEFAULT_SONNET_MODEL"] == "MiniMax-M2.7"
+    assert profile.env["ANTHROPIC_MODEL"] == "MiniMax-M3"
+    assert profile.env["ANTHROPIC_DEFAULT_SONNET_MODEL"] == "MiniMax-M3"
     assert profile.env["API_TIMEOUT_MS"] == "3000000"
     assert profile.env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] == "1"
 
@@ -50,11 +50,11 @@ def test_generate_profile_from_minimax_cn_preset():
 
     assert name == "claude-minimax-cn"
     assert profile.agent == "claude"
-    assert profile.model == "MiniMax-M2.7"
+    assert profile.model == "MiniMax-M3"
     assert profile.base_url == "https://api.minimaxi.com/anthropic"
     assert profile.api_key_env == "MINIMAX_API_KEY"
-    assert profile.env["ANTHROPIC_DEFAULT_OPUS_MODEL"] == "MiniMax-M2.7"
-    assert profile.env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] == "MiniMax-M2.7"
+    assert profile.env["ANTHROPIC_DEFAULT_OPUS_MODEL"] == "MiniMax-M3"
+    assert profile.env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] == "MiniMax-M3"
 
 
 def test_minimax_presets_in_builtin_list():
