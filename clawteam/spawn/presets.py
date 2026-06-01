@@ -137,7 +137,7 @@ def builtin_presets() -> dict[str, AgentPreset]:
             "MiniMax China Anthropic-compatible Claude Code endpoint.",
             "MINIMAX_API_KEY",
             "https://api.minimaxi.com/anthropic",
-            "MiniMax-M2.7",
+            "MiniMax-M3",
             extra_env={
                 "API_TIMEOUT_MS": "3000000",
                 "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
@@ -147,7 +147,7 @@ def builtin_presets() -> dict[str, AgentPreset]:
             "MiniMax global Anthropic-compatible Claude Code endpoint.",
             "MINIMAX_API_KEY",
             "https://api.minimax.io/anthropic",
-            "MiniMax-M2.7",
+            "MiniMax-M3",
             extra_env={
                 "API_TIMEOUT_MS": "3000000",
                 "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
