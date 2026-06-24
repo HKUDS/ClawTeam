@@ -106,6 +106,26 @@ def _safe_snapshot_tag(tag: str) -> str:
     return safe or "snapshot"
 
 
+def _safe_filename_part(value: Any, kind: str) -> str:
+    return validate_identifier(str(value or "unknown"), kind)
+
+
+def _validate_restore_bundle(bundle: dict[str, Any]) -> None:
+    for task in bundle.get("tasks", []):
+        _safe_filename_part(task.get("id"), "task id")
+    for sess in bundle.get("sessions", []):
+        _safe_filename_part(
+            sess.get("agentName", sess.get("agent_name")),
+            "session agent name",
+        )
+    for cost in bundle.get("costs", []):
+        _safe_filename_part(cost.get("id"), "cost id")
+        _safe_filename_part(
+            str(cost.get("reportedAt") or "x").replace(":", "-").replace("+", "p"),
+            "cost timestamp",
+        )
+
+
 class SnapshotManager:
     """Create and restore full team state snapshots.
 
@@ -196,6 +216,7 @@ class SnapshotManager:
 
     def load_bundle(self, snapshot_id: str) -> dict[str, Any]:
         """Load a snapshot bundle from disk."""
+        validate_identifier(snapshot_id, "snapshot id")
         path = _snapshots_root(self.team_name) / f"snap-{snapshot_id}.json"
         if not path.exists():
             raise ValueError(f"Snapshot '{snapshot_id}' not found")
@@ -207,6 +228,7 @@ class SnapshotManager:
         Returns a summary dict. With dry_run=True nothing is written.
         """
         bundle = self.load_bundle(snapshot_id)
+        _validate_restore_bundle(bundle)
 
         summary: dict[str, Any] = {
             "snapshot_id": snapshot_id,
@@ -245,7 +267,7 @@ class SnapshotManager:
         tasks_dir = ensure_within_root(data_dir / "tasks", self.team_name)
         tasks_dir.mkdir(parents=True, exist_ok=True)
         for task in bundle.get("tasks", []):
-            tid = task.get("id", "unknown")
+            tid = _safe_filename_part(task.get("id"), "task id")
             _atomic_write(tasks_dir / f"task-{tid}.json", task)
 
         # events -- restored with sequential names to avoid collisions
@@ -258,15 +280,21 @@ class SnapshotManager:
         sessions_dir = ensure_within_root(data_dir / "sessions", self.team_name)
         sessions_dir.mkdir(parents=True, exist_ok=True)
         for sess in bundle.get("sessions", []):
-            name = sess.get("agentName", sess.get("agent_name", "unknown"))
+            name = _safe_filename_part(
+                sess.get("agentName", sess.get("agent_name")),
+                "session agent name",
+            )
             _atomic_write(sessions_dir / f"{name}.json", sess)
 
         # costs
         costs_dir = ensure_within_root(data_dir / "costs", self.team_name)
         costs_dir.mkdir(parents=True, exist_ok=True)
         for cost in bundle.get("costs", []):
-            cid = cost.get("id", "unknown")
-            ts = cost.get("reportedAt", "x").replace(":", "-").replace("+", "p")
+            cid = _safe_filename_part(cost.get("id"), "cost id")
+            ts = _safe_filename_part(
+                str(cost.get("reportedAt") or "x").replace(":", "-").replace("+", "p"),
+                "cost timestamp",
+            )
             _atomic_write(costs_dir / f"cost-{ts}-{cid}.json", cost)
 
         # inbox messages
@@ -285,6 +313,7 @@ class SnapshotManager:
         return summary
 
     def delete(self, snapshot_id: str) -> bool:
+        validate_identifier(snapshot_id, "snapshot id")
         path = _snapshots_root(self.team_name) / f"snap-{snapshot_id}.json"
         if path.exists():
             path.unlink()
