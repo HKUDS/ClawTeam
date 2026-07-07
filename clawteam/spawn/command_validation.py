@@ -132,7 +132,8 @@ def ensure_docker_workspace(command: list[str], cwd: str) -> list[str]:
 
     image_index, image, remainder = spec
     prefix = list(command[:image_index])
-    volume_spec = f"{cwd}:{cwd}"
+    cwd_norm = cwd.replace("\\", "/")
+    volume_spec = f"{cwd_norm}:{cwd_norm}"
 
     if not _docker_has_workdir(prefix, cwd):
         prefix.extend(["-w", cwd])
@@ -151,7 +152,9 @@ def ensure_docker_mount(command: list[str], host_path: str, container_path: str 
     image_index, image, remainder = spec
     prefix = list(command[:image_index])
     target_path = container_path or host_path
-    volume_spec = f"{host_path}:{target_path}"
+    host_path_norm = host_path.replace("\\", "/")
+    target_path_norm = target_path.replace("\\", "/")
+    volume_spec = f"{host_path_norm}:{target_path_norm}"
 
     if not _docker_has_mount(prefix, host_path, target_path):
         prefix.extend(["-v", volume_spec])
@@ -219,11 +222,46 @@ def _docker_has_mount(prefix: list[str], host_path: str, container_path: str) ->
     return False
 
 
+def _normalize_path(p: str) -> str:
+    """Normalize path slashes, drive letter casing, and translate Windows drive paths to /c/... format."""
+    p_norm = p.replace("\\", "/").rstrip("/")
+    if len(p_norm) >= 2 and p_norm[1] == ":" and p_norm[0].isalpha():
+        drive = p_norm[0].lower()
+        p_norm = f"/{drive}{p_norm[2:]}"
+    elif len(p_norm) >= 3 and p_norm[0] == "/" and p_norm[1].isalpha() and p_norm[2] == "/":
+        drive = p_norm[1].lower()
+        p_norm = f"/{drive}{p_norm[2:]}"
+    return p_norm.lower()
+
+
+def _split_volume_spec(spec: str) -> tuple[str, str]:
+    """Parse host_path and container_path from volume spec, handling Windows drive letter colons."""
+    seps = []
+    colons = [i for i, char in enumerate(spec) if char == ':']
+    for c in colons:
+        is_drive = False
+        if c > 0 and spec[c-1].isalpha():
+            if c == 1:
+                is_drive = True
+            elif c > 1 and spec[c-2] in (':', '/', '\\', ' '):
+                is_drive = True
+        if not is_drive:
+            seps.append(c)
+
+    if seps:
+        host = spec[:seps[0]]
+        container = spec[seps[0]+1:]
+        if len(seps) > 1:
+            container = spec[seps[0]+1:seps[1]]
+        return host, container
+    return spec, ""
+
+
 def _volume_targets(spec: str, host_path: str, container_path: str) -> bool:
-    parts = spec.split(":")
-    if len(parts) < 2:
+    parsed_host, parsed_container = _split_volume_spec(spec)
+    if not parsed_host or not parsed_container:
         return False
-    return parts[0] == host_path and parts[1] == container_path
+    return _normalize_path(parsed_host) == _normalize_path(host_path) and _normalize_path(parsed_container) == _normalize_path(container_path)
 
 
 def _mount_targets(spec: str, host_path: str, container_path: str) -> bool:
