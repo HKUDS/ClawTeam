@@ -4124,7 +4124,7 @@ def launch_team(
 
     # 8. Spawn all agents (leader first, then workers)
     all_agents = [tmpl.leader] + list(tmpl.agents)
-    spawned: list[dict[str, str]] = []
+    spawned: list[dict[str, object]] = []
     resolved_profile = None
     if profile:
         try:
@@ -4186,33 +4186,70 @@ def launch_team(
             is_leader=(agent.name == tmpl.leader.name),
             keepalive=True,
         )
-        spawned.append({"name": agent.name, "id": a_id, "type": agent.type, "result": result})
+        spawned.append(
+            {
+                "name": agent.name,
+                "id": a_id,
+                "type": agent.type,
+                "result": result,
+                "success": not result.startswith("Error"),
+            }
+        )
 
     # 9. Output summary
+    successful_count = sum(bool(s["success"]) for s in spawned)
+    if successful_count == len(spawned):
+        launch_status = "launched"
+    elif successful_count:
+        launch_status = "partial"
+    else:
+        launch_status = "failed"
+
     out = {
-        "status": "launched",
+        "status": launch_status,
         "team": t_name,
         "template": tmpl.name,
         "backend": be_name,
-        "agents": [{"name": s["name"], "id": s["id"], "type": s["type"]} for s in spawned],
+        "agents": spawned,
     }
 
     def _human(_data):
-        console.print(f"\n[green bold]Team '{t_name}' launched from template '{tmpl.name}'[/green bold]\n")
+        if launch_status == "launched":
+            console.print(
+                f"\n[green bold]Team '{t_name}' launched from template "
+                f"'{tmpl.name}'[/green bold]\n"
+            )
+        elif launch_status == "partial":
+            console.print(
+                f"\n[yellow bold]Team '{t_name}' launched with failures from template "
+                f"'{tmpl.name}'[/yellow bold]\n"
+            )
+        else:
+            console.print(
+                f"\n[red bold]Team '{t_name}' failed to launch from template "
+                f"'{tmpl.name}'[/red bold]\n"
+            )
         table = Table(title="Agents")
         table.add_column("Name", style="cyan")
         table.add_column("Type")
         table.add_column("ID", style="dim")
+        table.add_column("Status")
         for s in spawned:
-            table.add_row(s["name"], s["type"], s["id"])
+            status = "[green]launched[/green]" if s["success"] else "[red]failed[/red]"
+            table.add_row(str(s["name"]), str(s["type"]), str(s["id"]), status)
         console.print(table)
+        for s in spawned:
+            if not s["success"]:
+                console.print(f"[red]FAILED {s['name']}:[/red] {s['result']}")
         console.print()
-        if be_name == "tmux":
+        if be_name == "tmux" and successful_count:
             console.print(f"[bold]Attach:[/bold] tmux attach -t clawteam-{t_name}")
         console.print(f"[bold]Board:[/bold]  clawteam board show {t_name}")
         console.print(f"[bold]Inbox:[/bold]  clawteam inbox peek {t_name} --agent <name>")
 
     _output(out, _human)
+    if launch_status == "failed":
+        raise typer.Exit(1)
 
 
 # ── Hook management ────────────────────────────────────────────────────
