@@ -3771,13 +3771,27 @@ def workspace_cleanup(
         raise typer.Exit(1)
 
     if agent:
+        workspace = ws_mgr.get_workspace(team, agent)
         ok = ws_mgr.cleanup_workspace(team, agent)
         if ok:
             console.print(f"[green]OK[/green] Cleaned up workspace for '{agent}'.")
-        else:
+        elif workspace is None:
             console.print(f"[yellow]No workspace found for '{agent}'.[/yellow]")
+        else:
+            console.print(
+                f"[red]Could not clean up workspace for '{agent}'; "
+                "the workspace and branch were preserved.[/red]"
+            )
+            raise typer.Exit(1)
     else:
         count = ws_mgr.cleanup_team(team)
+        remaining = ws_mgr.list_workspaces(team)
+        if remaining:
+            console.print(
+                f"[yellow]Cleaned up {count} workspace(s) for team '{team}'; "
+                f"{len(remaining)} workspace(s) remain and were preserved.[/yellow]"
+            )
+            raise typer.Exit(1)
         console.print(f"[green]OK[/green] Cleaned up {count} workspace(s) for team '{team}'.")
 
 

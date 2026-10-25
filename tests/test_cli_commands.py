@@ -645,3 +645,44 @@ def test_run_cli_resume_reuses_existing_leader_and_session(monkeypatch, tmp_path
     assert captured["agent_name"] == "leader"
     assert captured["agent_id"] == "leader001"
     assert captured["command"] == ["claude", "--resume", "sess-123"]
+
+
+def test_workspace_cleanup_reports_preserved_workspace_when_checkpoint_fails(monkeypatch):
+    class FakeWorkspaceManager:
+        def get_workspace(self, team, agent):
+            return object()
+
+        def cleanup_workspace(self, team, agent):
+            return False
+
+    monkeypatch.setattr(
+        "clawteam.workspace.get_workspace_manager",
+        lambda repo: FakeWorkspaceManager(),
+    )
+
+    result = CliRunner().invoke(app, ["workspace", "cleanup", "demo", "--agent", "alice"])
+
+    assert result.exit_code == 1
+    assert "workspace and branch were" in result.output
+    assert "preserved." in result.output
+    assert "No workspace found" not in result.output
+
+
+def test_workspace_cleanup_team_reports_remaining_preserved_workspaces(monkeypatch):
+    class FakeWorkspaceManager:
+        def cleanup_team(self, team):
+            return 1
+
+        def list_workspaces(self, team):
+            return [object()]
+
+    monkeypatch.setattr(
+        "clawteam.workspace.get_workspace_manager",
+        lambda repo: FakeWorkspaceManager(),
+    )
+
+    result = CliRunner().invoke(app, ["workspace", "cleanup", "demo"])
+
+    assert result.exit_code == 1
+    assert "1 workspace(s) remain and were" in result.output
+    assert "preserved." in result.output

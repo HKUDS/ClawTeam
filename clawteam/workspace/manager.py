@@ -210,7 +210,8 @@ class WorkspaceManager:
             try:
                 self.checkpoint(team_name, agent_name, f"[clawteam] final checkpoint: {agent_name}")
             except Exception:
-                pass
+                logger.warning("workspace checkpoint failed; preserving workspace")
+                return False
 
         try:
             git.remove_worktree(self.repo_root, Path(info.worktree_path))
